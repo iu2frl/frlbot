@@ -1,0 +1,9 @@
+feedparser
+python-dateutil
+telebot
+aiohttp
+browser_cookie3
+PyExecJS
+curl_cffi
+pycryptodome
+schedule

@@ -1,0 +1,6 @@
+frlbot/
+**/__pycache__/**
+*.db
+.env
+*.tar
+*.tar.gz
