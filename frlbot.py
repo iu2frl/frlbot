@@ -112,17 +112,30 @@ def parseNews() -> list[newsFromFeed]:
     # Scan each feed and convert it to a class element. Store the checksum to avoid dupes
     for singleFeed in feedsList:
         logging.debug("Processing [" + singleFeed["link"] + "]")
+        # Old RSS format
         if singleFeed["published"]:
+            # Check if valid content
+            if len(singleFeed["summary"]) <= 10:
+                logging.warning("Skipping [" + singleFeed["link"] + "], empty content")   
+                continue
+            # Generate new article
             newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], singleFeed["author"], singleFeed["summary"], singleFeed["link"])
+        # New RSS format
         elif singleFeed["pubDate"]:
+            # Check if valid content
+            if len(singleFeed["description"]) <= 10:
+                logging.warning("Skipping [" + singleFeed["link"] + "], empty content")
+                continue
+            # Generate new article
             newArticle = newsFromFeed(singleFeed["title"], singleFeed["pubDate"], singleFeed["dc:creator"], singleFeed["description"], singleFeed["link"])
         else:
+            # Unknown format
             logging.warning("Skipping [" + singleFeed["link"] + "], incompatible RSS format")
             continue
         newsList.append(newArticle)
+    # Return list
     logging.info("Fetch [" + str(len(newsList)) + "] news")
     newsList.sort(key=lambda news: news.date, reverse=True)
-    
     return newsList
 
 # Loop per each AI provider
