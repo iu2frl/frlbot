@@ -136,8 +136,8 @@ def ReworkText(inputNews: newsFromFeed) -> str:
 def Main():
     logging.info("Starting bot")
     # Connect to SQLite
-    logging.info("Opening SQLite store")
-    con = sqlite3.connect("frlbot.db")
+    logging.debug("Opening SQLite store")
+    con = sqlite3.connect("store/frlbot.db")
     cur = con.cursor()
     try:
         cur.execute("CREATE TABLE news(date, checksum)")
@@ -175,8 +175,15 @@ def Main():
         if newsCnt >= maxNews:
             break
 
-schedule.every().day.at("07:00").do(Main, )
-schedule.every().day.at("19:00").do(Main, )
+schedule.every().day.at("06:00").do(Main, )
+schedule.every().day.at("08:00").do(Main, )
+schedule.every().day.at("10:00").do(Main, )
+schedule.every().day.at("12:00").do(Main, )
+schedule.every().day.at("14:00").do(Main, )
+schedule.every().day.at("16:00").do(Main, )
+schedule.every().day.at("18:00").do(Main, )
+schedule.every().day.at("20:00").do(Main, )
+schedule.every().day.at("22:00").do(Main, )
 
 # Main method invocation
 if __name__ == "__main__":
