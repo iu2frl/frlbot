@@ -15,6 +15,8 @@ import hashlib
 import sqlite3
 import schedule
 import time
+import sys
+import getopt
 # Import gpt4free class
 import g4f
 
@@ -35,7 +37,7 @@ def initializeBot() -> str:
         logging.critical("Invalid input token format")
         raise Exception("Invalid BOT_TOKEN")
     # Return token
-    return BOT_TOKEN
+    return str(BOT_TOKEN)
 
 # Get target chat from ENVimport datetime
 def getTargetChatId() -> int:
@@ -44,15 +46,15 @@ def getTargetChatId() -> int:
     if (not BOT_TARGET):
         logging.critical("Input token is empty!")
         raise Exception("Invalid BOT_TARGET")
-    if (len(BOT_TARGET) < 10):
+    if (len(BOT_TARGET) < 5):
         logging.critical("Input token is too short!")
         raise Exception("Invalid BOT_TARGET")
     # Return token
-    return BOT_TARGET
+    return int(BOT_TARGET)
 
 # Get how many news we should post at each loop
 def getMaxNewsCnt() -> int:
-    return os.getenv('NEWS_COUNT', default=5)
+    return int(os.getenv('NEWS_COUNT', default=1))
 
 # Create news class
 class newsFromFeed(list):
@@ -133,6 +135,7 @@ def ReworkText(inputNews: newsFromFeed) -> str:
         logging.error("Unable to process AI text rework")
         return inputNews.summary
     
+# Main code
 def Main():
     logging.info("Starting bot")
     # Connect to SQLite
@@ -175,19 +178,45 @@ def Main():
         if newsCnt >= maxNews:
             break
 
+# Check if force send
+def CheckForce(argv):
+    opts, args = getopt.getopt(argv,"f",["force"])
+    for opt, arg in opts:
+        if opt == '-f':
+            logging.info("Forcing execution")
+            return True
+        else:
+            return False
+
 schedule.every().day.at("06:00").do(Main, )
+schedule.every().day.at("07:00").do(Main, )
 schedule.every().day.at("08:00").do(Main, )
+schedule.every().day.at("09:00").do(Main, )
 schedule.every().day.at("10:00").do(Main, )
+schedule.every().day.at("11:00").do(Main, )
 schedule.every().day.at("12:00").do(Main, )
+schedule.every().day.at("13:00").do(Main, )
 schedule.every().day.at("14:00").do(Main, )
+schedule.every().day.at("15:00").do(Main, )
 schedule.every().day.at("16:00").do(Main, )
+schedule.every().day.at("17:00").do(Main, )
 schedule.every().day.at("18:00").do(Main, )
+schedule.every().day.at("19:00").do(Main, )
 schedule.every().day.at("20:00").do(Main, )
+schedule.every().day.at("21:00").do(Main, )
 schedule.every().day.at("22:00").do(Main, )
 
 # Main method invocation
 if __name__ == "__main__":
     logging.info("Starting frlbot at " + str(datetime.now()))
+    # Check if store folder exists
+    if not os.path.exists("store"):
+        logging.info("Creating 'store' folder")
+        os.makedirs("store")
+    # Check if script was forcefully run
+    if CheckForce(sys.argv[1:]):
+        Main()
+        sys.exit(0)
     while True:
         schedule.run_pending()
         logging.debug("Waiting...")

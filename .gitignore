@@ -4,3 +4,4 @@ frlbot/
 .env
 *.tar
 *.tar.gz
+docker/
