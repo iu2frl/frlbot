@@ -21,11 +21,17 @@ import getopt
 import g4f
 
 # Specify logging level
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
+
+# Set DryRun mode
+dryRun = False
+forceRun = False
 
 # Get bot token from ENV
 def initializeBot() -> str:
     # Read API Token from environment variables
+    if dryRun:
+        return ""
     BOT_TOKEN: str = os.environ.get('BOT_TOKEN')
     if (not BOT_TOKEN):
         logging.critical("Input token is empty!")
@@ -41,6 +47,8 @@ def initializeBot() -> str:
 
 # Get target chat from ENVimport datetime
 def getTargetChatId() -> int:
+    if dryRun:
+        return ""
     # Read API Token from environment variables
     BOT_TARGET: str = os.environ.get('BOT_TARGET')
     if (not BOT_TARGET):
@@ -68,7 +76,7 @@ class newsFromFeed(list):
     def __init__(self, inputTitle: str, inputDate: str, inputAuthor: str, inputSummary: str, inputLink: str = "") -> None:
         self.title = inputTitle.strip()
         self.date = dateutil.parser.parse(inputDate)
-        self.author = inputAuthor.strip().title()
+        self.author = inputAuthor.strip()
         # Remove HTML tags
         regExHtml = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
         # Remove "Read more"
@@ -90,18 +98,31 @@ def parseNews() -> list[newsFromFeed]:
                 'https://www.cisar.it/index.php?format=feed&type=rss',
                 'https://www.blogger.com/feeds/3151423644013078076/posts/default',
                 'https://www.pa9x.com/feed/',
-                'https://www.ham-yota.com/feed/'
+                'https://www.ham-yota.com/feed/',
+                'https://www.iu2frl.it/feed/',
+                'https://www.yota-italia.it/feed/',
+                'https://feeds.feedburner.com/OnAllBands',
+                'https://www.hamradio.me/feed',
             ]
-
+    # Get feeds from the list above
     fetchFeed = [feedparser.parse(url)['entries'] for url in urls]
     feedsList = [item for feed in fetchFeed for item in feed]
-    feedsList.sort(key=lambda x: dateutil.parser.parse(x['published']), reverse=True)
     # Prepare list of news
     newsList: list[newsFromFeed] = []
     # Scan each feed and convert it to a class element. Store the checksum to avoid dupes
     for singleFeed in feedsList:
-        newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], singleFeed["author"], singleFeed["summary"], singleFeed["link"])
+        logging.debug("Processing [" + singleFeed["link"] + "]")
+        if singleFeed["published"]:
+            newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], singleFeed["author"], singleFeed["summary"], singleFeed["link"])
+        elif singleFeed["pubDate"]:
+            newArticle = newsFromFeed(singleFeed["title"], singleFeed["pubDate"], singleFeed["dc:creator"], singleFeed["description"], singleFeed["link"])
+        else:
+            logging.warning("Skipping [" + singleFeed["link"] + "], incompatible RSS format")
+            continue
         newsList.append(newArticle)
+    logging.info("Fetch [" + str(len(newsList)) + "] news")
+    newsList.sort(key=lambda news: news.date, reverse=True)
+    
     return newsList
 
 # Loop per each AI provider
@@ -163,7 +184,10 @@ def Main():
                             "\n\U0001F4C5 Data: " + singleNews.date.strftime("%Y/%m/%d, %H:%M") + \
                             "\n\n" + ReworkText(singleNews) + \
                             "\n\n\U0001F517 Articolo completo: " + singleNews.link
-                bot.send_message(getTargetChatId(), msgToSend, parse_mode="MARKDOWN")
+                if not dryRun:
+                    bot.send_message(getTargetChatId(), msgToSend, parse_mode="MARKDOWN")
+                else:
+                    logging.info(msgToSend)
                 # Store this article to DB
                 logging.debug("Adding [" + singleNews.checksum + "] to store")
                 cur.execute("INSERT INTO news(date, checksum) VALUES(?, ?)", [singleNews.date, singleNews.checksum])
@@ -179,14 +203,17 @@ def Main():
             break
 
 # Check if force send
-def CheckForce(argv):
-    opts, args = getopt.getopt(argv,"f",["force"])
+def CheckForce(argv) -> list[bool, bool]:
+    opts, args = getopt.getopt(argv,"fd",["force", "dry"])
+    dryRun = False
+    forceRun = False
     for opt, arg in opts:
-        if opt == '-f':
-            logging.info("Forcing execution")
-            return True
-        else:
-            return False
+        if opt in ("-d", "--dry"):
+            dryRun = True
+        if opt in ("-f", "--force"):
+            forceRun = True
+    logging.info("DryRun: " + str(dryRun) + " - ForceRun: " + str(forceRun))
+    return dryRun, forceRun
 
 schedule.every().day.at("06:00").do(Main, )
 schedule.every().day.at("07:00").do(Main, )
@@ -214,7 +241,9 @@ if __name__ == "__main__":
         logging.info("Creating 'store' folder")
         os.makedirs("store")
     # Check if script was forcefully run
-    if CheckForce(sys.argv[1:]):
+    dryRun, forceRun = CheckForce(sys.argv[1:])
+    if forceRun:
+        logging.info("Starting forced execution")
         Main()
         sys.exit(0)
     while True:
