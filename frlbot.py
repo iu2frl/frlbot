@@ -180,6 +180,7 @@ schedule.every().day.at("19:00").do(Main, )
 
 # Main method invocation
 if __name__ == "__main__":
+    logging.info("Starting frlbot at " + str(datetime.now()))
     while True:
         schedule.run_pending()
         logging.debug("Waiting...")
