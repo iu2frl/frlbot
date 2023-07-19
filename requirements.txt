@@ -7,3 +7,4 @@ PyExecJS
 curl_cffi
 pycryptodome
 schedule
+asyncio

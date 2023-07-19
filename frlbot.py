@@ -17,6 +17,7 @@ import schedule
 import time
 import sys
 import getopt
+import asyncio
 # Import gpt4free class
 import g4f
 
@@ -26,9 +27,33 @@ logging.basicConfig(level=logging.DEBUG)
 # Set DryRun mode
 dryRun = False
 forceRun = False
+noAi = False
+
+# SQLite stuff
+sqliteConn: sqlite3.Connection = None
+sqliteCursor: sqlite3.Cursor = None
+
+# Telegram Bot
+telegramBot: telebot.TeleBot
+
+# Default feeds
+defaultUrls = [
+                'https://www.amsat.org/feed/',
+                'https://qrper.com/feed/',
+                'https://swling.com/blog/feed/', 
+                'https://www.ari.it/?format=feed&type=rss',
+                'https://www.cisar.it/index.php?format=feed&type=rss',
+                'https://www.blogger.com/feeds/3151423644013078076/posts/default',
+                'https://www.pa9x.com/feed/',
+                'https://www.ham-yota.com/feed/',
+                'https://www.iu2frl.it/feed/',
+                'https://www.yota-italia.it/feed/',
+                'https://feeds.feedburner.com/OnAllBands',
+                'https://www.hamradio.me/feed',
+            ]
 
 # Get bot token from ENV
-def initializeBot() -> str:
+def GetBotApiKey() -> str:
     # Read API Token from environment variables
     if dryRun:
         return ""
@@ -45,7 +70,7 @@ def initializeBot() -> str:
     # Return token
     return str(BOT_TOKEN)
 
-# Get target chat from ENVimport datetime
+# Get target chat from ENV
 def getTargetChatId() -> int:
     if dryRun:
         return ""
@@ -60,9 +85,26 @@ def getTargetChatId() -> int:
     # Return token
     return int(BOT_TARGET)
 
+# Get target chat from ENV
+def getAdminChatId() -> int:
+    if dryRun:
+        return ""
+    # Read API Token from environment variables
+    BOT_TARGET: str = os.environ.get('BOT_ADMIN')
+    if (not BOT_TARGET):
+        logging.warning("Admin is empty! No commands will be accepted")
+        return -1
+    # Return token
+    return int(BOT_TARGET)
+
 # Get how many news we should post at each loop
 def getMaxNewsCnt() -> int:
-    return int(os.getenv('NEWS_COUNT', default=1))
+    return int(os.getenv('NEWS_COUNT', default=2))
+
+# Bot initialization
+def InitializeBot():
+    global telegramBot
+    telegramBot = telebot.TeleBot(GetBotApiKey())
 
 # Create news class
 class newsFromFeed(list):
@@ -89,23 +131,9 @@ class newsFromFeed(list):
         pass
 
 # Parse RSS feed
-def parseNews() -> list[newsFromFeed]:
-    urls = [
-                'https://www.amsat.org/feed/',
-                'https://qrper.com/feed/',
-                'https://swling.com/blog/feed/', 
-                'https://www.ari.it/?format=feed&type=rss',
-                'https://www.cisar.it/index.php?format=feed&type=rss',
-                'https://www.blogger.com/feeds/3151423644013078076/posts/default',
-                'https://www.pa9x.com/feed/',
-                'https://www.ham-yota.com/feed/',
-                'https://www.iu2frl.it/feed/',
-                'https://www.yota-italia.it/feed/',
-                'https://feeds.feedburner.com/OnAllBands',
-                'https://www.hamradio.me/feed',
-            ]
+def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
     # Get feeds from the list above
-    fetchFeed = [feedparser.parse(url)['entries'] for url in urls]
+    fetchFeed = [feedparser.parse(url)['entries'] for url in urlsList]
     feedsList = [item for feed in fetchFeed for item in feed]
     # Prepare list of news
     newsList: list[newsFromFeed] = []
@@ -152,6 +180,10 @@ def HandleAi(inputQuery: str, botProvider) -> str:
 
 # Handle GPT stuff
 def ReworkText(inputNews: newsFromFeed) -> str:
+    # Check if skip AI
+    if noAi:
+        return inputNews.summary
+    # Start AI rework
     logging.debug("Reworking: [" + inputNews.link + "]")
     gptCommand = "Rielabora questo testo e traducilo in italiano se necessario: "
     inputQuery = gptCommand + inputNews.summary
@@ -169,26 +201,58 @@ def ReworkText(inputNews: newsFromFeed) -> str:
         logging.error("Unable to process AI text rework")
         return inputNews.summary
     
+# Database preparation
+def PrepareDb() -> None:
+    # Connect to SQLite
+    logging.debug("Opening SQLite store")
+    global sqliteConn 
+    global sqliteCursor
+    sqliteConn = sqlite3.connect("store/frlbot.db")
+    sqliteCursor = sqliteConn.cursor()
+    # Create news table
+    try:
+        sqliteCursor.execute("CREATE TABLE news(date, checksum)")
+        logging.info("News table was generated successfully")
+    except:
+        logging.debug("News table already exists")
+    # Create feeds table
+    try:
+        sqliteCursor.execute("CREATE TABLE feeds(url)")
+        logging.info("Feeds table was generated successfully")
+    except:
+        logging.debug("Feeds table already exists")
+
 # Main code
 def Main():
     logging.info("Starting bot")
-    # Connect to SQLite
-    logging.debug("Opening SQLite store")
-    con = sqlite3.connect("store/frlbot.db")
-    cur = con.cursor()
-    try:
-        cur.execute("CREATE TABLE news(date, checksum)")
-    except:
-        logging.debug("Table already exists")
+    global sqliteConn
+    global sqliteCursor
     # Generate bot object
-    bot = telebot.TeleBot(initializeBot())
+    global telegramBot
     # Track how many news we sent
     newsCnt: int = 0
     maxNews = getMaxNewsCnt()
+    # Get feeds from DB
+    if (sqliteCursor.execute("SELECT url FROM feeds WHERE 1").fetchone() is None):
+        logging.info("News table is empty, adding default")
+        try:
+            for singleUrl in defaultUrls:
+                sqliteCursor.execute("INSERT INTO feeds(url) VALUES(?)", [singleUrl])
+            sqliteConn.commit()
+            logging.debug("Default records were added")
+        except Exception as retExc:
+            logging.error(retExc)
+            return
+    # Clean data from DB
+    feedsFromDb = [x[0] for x in sqliteCursor.execute("SELECT url FROM feeds WHERE 1").fetchall()]
+    if feedsFromDb is None:
+        logging.error("No news from DB")
+        return
+    logging.debug("Fetch: " + str(feedsFromDb))
     # Get news from feed
-    for singleNews in parseNews():
+    for singleNews in parseNews(feedsFromDb):
         # Check if we already sent this message
-        if cur.execute("SELECT * FROM news WHERE checksum='" + singleNews.checksum + "'").fetchone() is None:
+        if sqliteCursor.execute("SELECT * FROM news WHERE checksum='" + singleNews.checksum + "'").fetchone() is None:
             logging.info("Sending: [" + singleNews.link + "]")
             # Prepare message to send
             try:
@@ -198,13 +262,14 @@ def Main():
                             "\n\n" + ReworkText(singleNews) + \
                             "\n\n\U0001F517 Articolo completo: " + singleNews.link
                 if not dryRun:
-                    bot.send_message(getTargetChatId(), msgToSend, parse_mode="MARKDOWN")
+                    telegramBot.send_message(getTargetChatId(), msgToSend, parse_mode="MARKDOWN")
                 else:
                     logging.info(msgToSend)
-                # Store this article to DB
-                logging.debug("Adding [" + singleNews.checksum + "] to store")
-                cur.execute("INSERT INTO news(date, checksum) VALUES(?, ?)", [singleNews.date, singleNews.checksum])
-                con.commit()
+                if not dryRun:
+                    # Store this article to DB
+                    logging.debug("Adding [" + singleNews.checksum + "] to store")
+                    sqliteCursor.execute("INSERT INTO news(date, checksum) VALUES(?, ?)", [singleNews.date, singleNews.checksum])
+                    sqliteConn.commit()
                 newsCnt += 1
             except Exception as retExc:
                 logging.error(str(retExc))
@@ -216,17 +281,20 @@ def Main():
             break
 
 # Check if force send
-def CheckForce(argv) -> list[bool, bool]:
-    opts, args = getopt.getopt(argv,"fd",["force", "dry"])
+def CheckArgs(argv) -> list[bool, bool, bool]:
+    opts, args = getopt.getopt(argv,"fdn",["force", "dry", "noai"])
     dryRun = False
     forceRun = False
+    noAi = False
     for opt, arg in opts:
         if opt in ("-d", "--dry"):
             dryRun = True
         if opt in ("-f", "--force"):
             forceRun = True
-    logging.info("DryRun: " + str(dryRun) + " - ForceRun: " + str(forceRun))
-    return dryRun, forceRun
+        if opt in ("-n", "--noai"):
+            noAi = True
+    logging.info("DryRun: " + str(dryRun) + " - ForceRun: " + str(forceRun) + " - NoAI: " + str(noAi))
+    return dryRun, forceRun, noAi
 
 schedule.every().day.at("06:00").do(Main, )
 schedule.every().day.at("07:00").do(Main, )
@@ -254,12 +322,32 @@ if __name__ == "__main__":
         logging.info("Creating 'store' folder")
         os.makedirs("store")
     # Check if script was forcefully run
-    dryRun, forceRun = CheckForce(sys.argv[1:])
+    dryRun, forceRun, noAi = CheckArgs(sys.argv[1:])
+    # Initialize Bot
+    if not dryRun:
+        InitializeBot()
+    # Prepare DB object
+    PrepareDb()
     if forceRun:
         logging.info("Starting forced execution")
         Main()
         sys.exit(0)
+    # Async bot polling
+    asyncio.get_event_loop().run_until_complete(telegramBot.infinity_polling())
+    # Scheduled execution
     while True:
         schedule.run_pending()
-        logging.debug("Waiting...")
-        time.sleep(50) # wait one minute
+
+# Handle LIST command
+@telegramBot.message_handler(content_types=["text"], commands=['urllist'])
+def HandleUrlListMessage(inputMessage: telebot.types.Message):
+    global telegramBot
+    if inputMessage.from_user.id == getAdminChatId():
+        feedsFromDb = [(x[0], x[1]) for x in sqliteCursor.execute("SELECT rowid, url FROM feeds WHERE 1").fetchall()]
+        if feedsFromDb is None:
+            telegramBot.reply_to(inputMessage, "No URLs in the url table")
+        else:
+            textMessage: str = ""
+            for singleElement in feedsFromDb:
+                textMessage += singleElement[0] + ": " + singleElement[1] + "\n"
+            telegramBot.reply_to(inputMessage, textMessage)
