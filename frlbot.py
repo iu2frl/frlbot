@@ -143,7 +143,7 @@ def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
         # Old RSS format
         if singleFeed["published"]:
             # Check if valid content
-            if len(singleFeed["summary"]) <= 10:
+            if len(re.sub(r"(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w\.-]*)", "", singleFeed["summary"])) <= 10:
                 logging.warning("Skipping [" + singleFeed["link"] + "], empty content")   
                 continue
             # Generate new article
@@ -151,7 +151,7 @@ def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
         # New RSS format
         elif singleFeed["pubDate"]:
             # Check if valid content
-            if len(singleFeed["description"]) <= 10:
+            if len(re.sub(r"(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w\.-]*)", "", singleFeed["description"])) <= 10:
                 logging.warning("Skipping [" + singleFeed["link"] + "], empty content")
                 continue
             # Generate new article
@@ -296,6 +296,22 @@ def CheckArgs(argv) -> list[bool, bool, bool]:
     logging.info("DryRun: " + str(dryRun) + " - ForceRun: " + str(forceRun) + " - NoAI: " + str(noAi))
     return dryRun, forceRun, noAi
 
+# # Handle LIST command
+# @telegramBot.message_handler(content_types=["text"], commands=['urllist'])
+# def HandleUrlListMessage(inputMessage: telebot.types.Message):
+#     global telegramBot
+#     if inputMessage.from_user.id == getAdminChatId():
+#         feedsFromDb = [(x[0], x[1]) for x in sqliteCursor.execute("SELECT rowid, url FROM feeds WHERE 1").fetchall()]
+#         if feedsFromDb is None:
+#             telegramBot.reply_to(inputMessage, "No URLs in the url table")
+#         else:
+#             textMessage: str = ""
+#             for singleElement in feedsFromDb:
+#                 textMessage += singleElement[0] + ": " + singleElement[1] + "\n"
+#             telegramBot.reply_to(inputMessage, textMessage)
+#     else:
+#         logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+
 schedule.every().day.at("06:00").do(Main, )
 schedule.every().day.at("07:00").do(Main, )
 schedule.every().day.at("08:00").do(Main, )
@@ -337,17 +353,3 @@ if __name__ == "__main__":
     # Scheduled execution
     while True:
         schedule.run_pending()
-
-# Handle LIST command
-@telegramBot.message_handler(content_types=["text"], commands=['urllist'])
-def HandleUrlListMessage(inputMessage: telebot.types.Message):
-    global telegramBot
-    if inputMessage.from_user.id == getAdminChatId():
-        feedsFromDb = [(x[0], x[1]) for x in sqliteCursor.execute("SELECT rowid, url FROM feeds WHERE 1").fetchall()]
-        if feedsFromDb is None:
-            telegramBot.reply_to(inputMessage, "No URLs in the url table")
-        else:
-            textMessage: str = ""
-            for singleElement in feedsFromDb:
-                textMessage += singleElement[0] + ": " + singleElement[1] + "\n"
-            telegramBot.reply_to(inputMessage, textMessage)

@@ -5,3 +5,4 @@ frlbot/
 *.tar
 *.tar.gz
 docker/
+store/
