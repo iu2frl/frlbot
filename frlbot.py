@@ -143,7 +143,11 @@ def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
                 logging.warning("Skipping [" + singleFeed["link"] + "], empty content")   
                 continue
             # Generate new article
-            newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], singleFeed["author"], singleFeed["summary"], singleFeed["link"])
+            try:
+                newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], singleFeed["author"], singleFeed["summary"], singleFeed["link"])
+                newsList.append(newArticle)
+            except Exception as retExc:
+                logging.warning("Cannot process [" + singleFeed["link"] + "], exception: " + str(retExc))
         # New RSS format
         elif singleFeed["pubDate"]:
             # Check if valid content
@@ -151,12 +155,15 @@ def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
                 logging.warning("Skipping [" + singleFeed["link"] + "], empty content")
                 continue
             # Generate new article
-            newArticle = newsFromFeed(singleFeed["title"], singleFeed["pubDate"], singleFeed["dc:creator"], singleFeed["description"], singleFeed["link"])
+            try:
+                newArticle = newsFromFeed(singleFeed["title"], singleFeed["pubDate"], singleFeed["dc:creator"], singleFeed["description"], singleFeed["link"])
+            except Exception as retExc:
+                logging.warning("Cannot process [" + singleFeed["link"] + "], exception: " + str(retExc))
+            newsList.append(newArticle)
         else:
             # Unknown format
             logging.warning("Skipping [" + singleFeed["link"] + "], incompatible RSS format")
             continue
-        newsList.append(newArticle)
     # Return list
     logging.info("Fetch [" + str(len(newsList)) + "] news")
     newsList.sort(key=lambda news: news.date, reverse=True)
