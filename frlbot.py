@@ -6,7 +6,8 @@
 # Import external classes
 import feedparser
 import dateutil.parser
-import telebot
+from telebot.async_telebot import AsyncTeleBot
+from telebot import telebot
 import logging
 import os
 from datetime import datetime
@@ -18,7 +19,6 @@ import time
 import sys
 import getopt
 import asyncio
-import multiprocessing
 # Import gpt4free class
 import g4f
 
@@ -31,7 +31,7 @@ forceRun = False
 noAi = False
 
 # Telegram Bot
-telegramBot: telebot.TeleBot
+telegramBot: AsyncTeleBot
 
 # Default feeds
 defaultUrls = [
@@ -101,7 +101,7 @@ def getMaxNewsCnt() -> int:
 # Bot initialization
 def InitializeBot():
     global telegramBot
-    telegramBot = telebot.TeleBot(GetBotApiKey())
+    telegramBot = AsyncTeleBot(GetBotApiKey())
 
 # Create news class
 class newsFromFeed(list):
@@ -319,6 +319,12 @@ schedule.every().day.at("20:00").do(Main, )
 schedule.every().day.at("21:00").do(Main, )
 schedule.every().day.at("22:00").do(Main, )
 
+def SchedulerLoop():
+    logging.info("Starting scheduler loop")
+    while True:
+        schedule.run_pending()
+        time.sleep(5)
+
 # Main method invocation
 if __name__ == "__main__":
     logging.info("Starting frlbot at " + str(datetime.now()))
@@ -333,23 +339,23 @@ if __name__ == "__main__":
         InitializeBot()
         # Handle LIST command
         @telegramBot.message_handler(content_types=["text"], commands=['urllist'])
-        def HandleUrlListMessage(inputMessage: telebot.types.Message):
+        async def HandleUrlListMessage(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
                 global telegramBot
                 sqlCon = GetSqlConn()
                 feedsFromDb = [(x[0], x[1]) for x in sqlCon.cursor().execute("SELECT rowid, url FROM feeds WHERE 1").fetchall()]
                 if len(feedsFromDb) < 1:
-                    telegramBot.reply_to(inputMessage, "No URLs in the url table")
+                    await telegramBot.reply_to(inputMessage, "No URLs in the url table")
                 else:
                     textMessage: str = ""
                     for singleElement in feedsFromDb:
                         textMessage += str(singleElement[0]) + ": " + singleElement[1] + "\n"
-                    telegramBot.reply_to(inputMessage, textMessage)
+                    await telegramBot.reply_to(inputMessage, textMessage)
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
         # Add new feed to the store   
         @telegramBot.message_handler(content_types=["text"], commands=['addfeed'])
-        def HandleUrlListMessage(inputMessage: telebot.types.Message):
+        async def HandleUrlListMessage(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
                 global telegramBot
                 sqlCon = GetSqlConn()
@@ -358,30 +364,30 @@ if __name__ == "__main__":
                     # Check if URL is valid
                     if "http" not in splitText[1]:
                         logging.warning("Invalid URL [" + splitText[1] + "]")
-                        telegramBot.reply_to(inputMessage, "Invalid URL format")
+                        await telegramBot.reply_to(inputMessage, "Invalid URL format")
                         return
                     # Check if feed already exists
                     if sqlCon.execute("SELECT * FROM feeds WHERE url=?", [splitText[1]]).fetchone() is not None:
                         
                         logging.warning("Duplicate URL [" + splitText[1] + "]")
-                        telegramBot.reply_to(inputMessage, "URL exists in the DB")
+                        await telegramBot.reply_to(inputMessage, "URL exists in the DB")
                         return
                     # Add it to the store
                     try:
                         logging.info("Adding [" + splitText[1] + "] to DB")
                         sqlCon.execute("INSERT INTO feeds(url) VALUES(?)", [splitText[1]])
                         sqlCon.commit()
-                        telegramBot.reply_to(inputMessage, "Added successfully!")
+                        await telegramBot.reply_to(inputMessage, "Added successfully!")
                     except Exception as retExc:
                         telegramBot.reply_to(inputMessage, retExc)
                 else:
                     logging.warning("Invalid AddFeed arguments [" + inputMessage.text + "]")
-                    telegramBot.reply_to(inputMessage, "Expecting only one argument")
+                    await telegramBot.reply_to(inputMessage, "Expecting only one argument")
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
         # Remove feed from the store
         @telegramBot.message_handler(content_types=["text"], commands=['rmfeed'])
-        def HandleUrlListMessage(inputMessage: telebot.types.Message):
+        async def HandleUrlListMessage(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
                 global telegramBot
                 sqlCon = GetSqlConn()
@@ -391,14 +397,14 @@ if __name__ == "__main__":
                         try:
                             sqlCon.execute("DELETE FROM feeds WHERE rowid=?", [splitText[1]])
                             sqlCon.commit()
-                            telegramBot.reply_to(inputMessage, "Element was removed successfully!")
+                            await telegramBot.reply_to(inputMessage, "Element was removed successfully!")
                         except Exception as retExc:
-                            telegramBot.reply_to(inputMessage, retExc)
+                            await telegramBot.reply_to(inputMessage, retExc)
                     else:
-                        telegramBot.reply_to(inputMessage, "[" + splitText[1] +"] is not a valid numeric index")
+                        await telegramBot.reply_to(inputMessage, "[" + splitText[1] +"] is not a valid numeric index")
                     
                 else:
-                    telegramBot.reply_to(inputMessage, "Expecting only one argument")
+                    await telegramBot.reply_to(inputMessage, "Expecting only one argument")
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
     # Prepare DB object
@@ -408,9 +414,10 @@ if __name__ == "__main__":
         Main()
         sys.exit(0)
     # Start async execution
-    logging.info("Starting infinite loop")
-    while True:
-        telegramBot.polling(non_stop=True)
-        schedule.run_pending()
-        time.sleep(.5)
+    logging.info("Starting main loop")
+    asyncio.wait_for(
+        asyncio.gather(
+        telegramBot.infinity_polling(),
+        SchedulerLoop(),
+        ), None, )
     
