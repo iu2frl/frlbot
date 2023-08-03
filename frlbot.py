@@ -358,7 +358,7 @@ if __name__ == "__main__":
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
         # Add new feed to the store   
         @telegramBot.message_handler(content_types=["text"], commands=['addfeed'])
-        def HandleUrlListMessage(inputMessage: telebot.types.Message):
+        def HandleAddMessage(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
                 global telegramBot
                 sqlCon = GetSqlConn()
@@ -390,7 +390,7 @@ if __name__ == "__main__":
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
         # Remove feed from the store
         @telegramBot.message_handler(content_types=["text"], commands=['rmfeed'])
-        def HandleUrlListMessage(inputMessage: telebot.types.Message):
+        def HandleRemoveMessage(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
                 global telegramBot
                 sqlCon = GetSqlConn()
@@ -408,6 +408,15 @@ if __name__ == "__main__":
                     
                 else:
                     telegramBot.reply_to(inputMessage, "Expecting only one argument")
+            else:
+                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+        @telegramBot.message_handler(content_types=["text"], commands=['force'])
+        def HandleForceMessage(inputMessage: telebot.types.Message):
+            if inputMessage.from_user.id == getAdminChatId():
+                logging.debug("Manual bot execution requested")
+                global telegramBot
+                telegramBot.reply_to(inputMessage, "Forcing bot execution")
+                Main()
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
     # Prepare DB object
