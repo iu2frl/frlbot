@@ -18,6 +18,7 @@ import time
 import sys
 import getopt
 import asyncio
+import multiprocessing
 # Import gpt4free class
 import g4f
 
@@ -406,8 +407,10 @@ if __name__ == "__main__":
         logging.info("Starting forced execution")
         Main()
         sys.exit(0)
-    # Async bot polling
-    asyncio.get_event_loop().run_until_complete(telegramBot.infinity_polling())
-    # Scheduled execution
+    # Start async execution
+    logging.info("Starting infinite loop")
     while True:
+        telegramBot.polling(non_stop=True)
         schedule.run_pending()
+        time.sleep(.5)
+    
