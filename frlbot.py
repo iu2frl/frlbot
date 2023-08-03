@@ -29,10 +29,6 @@ dryRun = False
 forceRun = False
 noAi = False
 
-# SQLite stuff
-sqliteConn: sqlite3.Connection = None
-sqliteCursor: sqlite3.Cursor = None
-
 # Telegram Bot
 telegramBot: telebot.TeleBot
 
@@ -185,7 +181,7 @@ def ReworkText(inputNews: newsFromFeed) -> str:
         return inputNews.summary
     # Start AI rework
     logging.debug("Reworking: [" + inputNews.link + "]")
-    gptCommand = "Rielabora questo testo e traducilo in italiano se necessario: "
+    gptCommand = "Riassumi questo testo, traducendolo in italiano nel caso in cui non lo sia: "
     inputQuery = gptCommand + inputNews.summary
     validResult = False
     providersList = [g4f.Provider.GetGpt, g4f.Provider.DeepAi, g4f.Provider.Aichat]
@@ -205,9 +201,7 @@ def ReworkText(inputNews: newsFromFeed) -> str:
 def PrepareDb() -> None:
     # Connect to SQLite
     logging.debug("Opening SQLite store")
-    global sqliteConn 
-    global sqliteCursor
-    sqliteConn = sqlite3.connect("store/frlbot.db")
+    sqliteConn = GetSqlConn()
     sqliteCursor = sqliteConn.cursor()
     # Create news table
     try:
@@ -221,30 +215,40 @@ def PrepareDb() -> None:
         logging.info("Feeds table was generated successfully")
     except:
         logging.debug("Feeds table already exists")
+    # Get feeds from DB
+    dataFromDb = sqliteCursor.execute("SELECT url FROM feeds WHERE 1").fetchall()
+    if (len(dataFromDb) < 1):
+        logging.info("News table is empty, adding default")
+        try:
+            for singleUrl in defaultUrls:
+                logging.debug("Adding [" + singleUrl + "]")
+                sqliteCursor.execute("INSERT INTO feeds(url) VALUES(?)", [singleUrl])
+            sqliteConn.commit()
+            if (len(sqliteCursor.execute("SELECT url FROM feeds WHERE 1").fetchall()) < 1):
+                raise Exception("Records were not added!")
+            logging.debug("Default records were added")
+        except Exception as retExc:
+            logging.error(retExc)
+            return
+    else:
+        logging.info("News table contains [" + str(len(dataFromDb)) + "] records")
+
+# Get SQL Connector
+def GetSqlConn() -> sqlite3.Connection:
+    return sqlite3.connect("store/frlbot.db")
 
 # Main code
 def Main():
     logging.info("Starting bot")
-    global sqliteConn
-    global sqliteCursor
     # Generate bot object
     global telegramBot
     # Track how many news we sent
     newsCnt: int = 0
     maxNews = getMaxNewsCnt()
-    # Get feeds from DB
-    if (sqliteCursor.execute("SELECT url FROM feeds WHERE 1").fetchone() is None):
-        logging.info("News table is empty, adding default")
-        try:
-            for singleUrl in defaultUrls:
-                sqliteCursor.execute("INSERT INTO feeds(url) VALUES(?)", [singleUrl])
-            sqliteConn.commit()
-            logging.debug("Default records were added")
-        except Exception as retExc:
-            logging.error(retExc)
-            return
+    # Get SQL cursor
+    sqlCon = GetSqlConn()
     # Clean data from DB
-    feedsFromDb = [x[0] for x in sqliteCursor.execute("SELECT url FROM feeds WHERE 1").fetchall()]
+    feedsFromDb = [x[0] for x in sqlCon.cursor().execute("SELECT url FROM feeds WHERE 1").fetchall()]
     if feedsFromDb is None:
         logging.error("No news from DB")
         return
@@ -252,7 +256,7 @@ def Main():
     # Get news from feed
     for singleNews in parseNews(feedsFromDb):
         # Check if we already sent this message
-        if sqliteCursor.execute("SELECT * FROM news WHERE checksum='" + singleNews.checksum + "'").fetchone() is None:
+        if sqlCon.cursor().execute("SELECT * FROM news WHERE checksum='" + singleNews.checksum + "'").fetchone() is None:
             logging.info("Sending: [" + singleNews.link + "]")
             # Prepare message to send
             try:
@@ -268,8 +272,8 @@ def Main():
                 if not dryRun:
                     # Store this article to DB
                     logging.debug("Adding [" + singleNews.checksum + "] to store")
-                    sqliteCursor.execute("INSERT INTO news(date, checksum) VALUES(?, ?)", [singleNews.date, singleNews.checksum])
-                    sqliteConn.commit()
+                    sqlCon.cursor().execute("INSERT INTO news(date, checksum) VALUES(?, ?)", [singleNews.date, singleNews.checksum])
+                    sqlCon.commit()
                 newsCnt += 1
             except Exception as retExc:
                 logging.error(str(retExc))
@@ -295,22 +299,6 @@ def CheckArgs(argv) -> list[bool, bool, bool]:
             noAi = True
     logging.info("DryRun: " + str(dryRun) + " - ForceRun: " + str(forceRun) + " - NoAI: " + str(noAi))
     return dryRun, forceRun, noAi
-
-# # Handle LIST command
-# @telegramBot.message_handler(content_types=["text"], commands=['urllist'])
-# def HandleUrlListMessage(inputMessage: telebot.types.Message):
-#     global telegramBot
-#     if inputMessage.from_user.id == getAdminChatId():
-#         feedsFromDb = [(x[0], x[1]) for x in sqliteCursor.execute("SELECT rowid, url FROM feeds WHERE 1").fetchall()]
-#         if feedsFromDb is None:
-#             telegramBot.reply_to(inputMessage, "No URLs in the url table")
-#         else:
-#             textMessage: str = ""
-#             for singleElement in feedsFromDb:
-#                 textMessage += singleElement[0] + ": " + singleElement[1] + "\n"
-#             telegramBot.reply_to(inputMessage, textMessage)
-#     else:
-#         logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
 
 schedule.every().day.at("06:00").do(Main, )
 schedule.every().day.at("07:00").do(Main, )
@@ -342,6 +330,76 @@ if __name__ == "__main__":
     # Initialize Bot
     if not dryRun:
         InitializeBot()
+        # Handle LIST command
+        @telegramBot.message_handler(content_types=["text"], commands=['urllist'])
+        def HandleUrlListMessage(inputMessage: telebot.types.Message):
+            if inputMessage.from_user.id == getAdminChatId():
+                global telegramBot
+                sqlCon = GetSqlConn()
+                feedsFromDb = [(x[0], x[1]) for x in sqlCon.cursor().execute("SELECT rowid, url FROM feeds WHERE 1").fetchall()]
+                if len(feedsFromDb) < 1:
+                    telegramBot.reply_to(inputMessage, "No URLs in the url table")
+                else:
+                    textMessage: str = ""
+                    for singleElement in feedsFromDb:
+                        textMessage += str(singleElement[0]) + ": " + singleElement[1] + "\n"
+                    telegramBot.reply_to(inputMessage, textMessage)
+            else:
+                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+        # Add new feed to the store   
+        @telegramBot.message_handler(content_types=["text"], commands=['addfeed'])
+        def HandleUrlListMessage(inputMessage: telebot.types.Message):
+            if inputMessage.from_user.id == getAdminChatId():
+                global telegramBot
+                sqlCon = GetSqlConn()
+                splitText = inputMessage.text.split(" ")
+                if (len(splitText) == 2):
+                    # Check if URL is valid
+                    if "http" not in splitText[1]:
+                        logging.warning("Invalid URL [" + splitText[1] + "]")
+                        telegramBot.reply_to(inputMessage, "Invalid URL format")
+                        return
+                    # Check if feed already exists
+                    if sqlCon.execute("SELECT * FROM feeds WHERE url=?", [splitText[1]]).fetchone() is not None:
+                        
+                        logging.warning("Duplicate URL [" + splitText[1] + "]")
+                        telegramBot.reply_to(inputMessage, "URL exists in the DB")
+                        return
+                    # Add it to the store
+                    try:
+                        logging.info("Adding [" + splitText[1] + "] to DB")
+                        sqlCon.execute("INSERT INTO feeds(url) VALUES(?)", [splitText[1]])
+                        sqlCon.commit()
+                        telegramBot.reply_to(inputMessage, "Added successfully!")
+                    except Exception as retExc:
+                        telegramBot.reply_to(inputMessage, retExc)
+                else:
+                    logging.warning("Invalid AddFeed arguments [" + inputMessage.text + "]")
+                    telegramBot.reply_to(inputMessage, "Expecting only one argument")
+            else:
+                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+        # Remove feed from the store
+        @telegramBot.message_handler(content_types=["text"], commands=['rmfeed'])
+        def HandleUrlListMessage(inputMessage: telebot.types.Message):
+            if inputMessage.from_user.id == getAdminChatId():
+                global telegramBot
+                sqlCon = GetSqlConn()
+                splitText = inputMessage.text.split(" ")
+                if (len(splitText) == 2):
+                    if (splitText[1].isnumeric()):
+                        try:
+                            sqlCon.execute("DELETE FROM feeds WHERE rowid=?", [splitText[1]])
+                            sqlCon.commit()
+                            telegramBot.reply_to(inputMessage, "Element was removed successfully!")
+                        except Exception as retExc:
+                            telegramBot.reply_to(inputMessage, retExc)
+                    else:
+                        telegramBot.reply_to(inputMessage, "[" + splitText[1] +"] is not a valid numeric index")
+                    
+                else:
+                    telegramBot.reply_to(inputMessage, "Expecting only one argument")
+            else:
+                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
     # Prepare DB object
     PrepareDb()
     if forceRun:
