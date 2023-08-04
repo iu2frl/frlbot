@@ -188,7 +188,7 @@ def ReworkText(inputNews: newsFromFeed) -> str:
         return inputNews.summary
     # Start AI rework
     logging.debug("Reworking: [" + inputNews.link + "]")
-    gptCommand = "Riassumi questo testo, traducendolo in italiano nel caso in cui non lo sia: "
+    gptCommand = "Traduci questo testo in italiano se necessario, altrimenti fanne il riassunto: "
     inputQuery = gptCommand + inputNews.summary
     validResult = False
     providersList = [g4f.Provider.GetGpt, g4f.Provider.DeepAi, g4f.Provider.Aichat]
