@@ -168,27 +168,27 @@ def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
     newsList.sort(key=lambda news: news.date, reverse=True)
     return newsList
 
-# Handle GPT stuff
-def ReworkText(inputNews: newsFromFeed) -> str:
-    # Check if skip AI
+# Handle translation
+def TranslateText(inputText: str) -> str:
+    # Check if skip translations
     if noAi:
-        return inputNews.summary
-    # Start AI rework
-    logging.debug("Reworking: [" + inputNews.link + "]")
+        return inputText
+    # Start text rework
+    logging.debug("Translating: [" + inputText + "]")
     translator = Translator()
     trResponse = None
     try:
-        trResponse = translator.translate(inputNews.summary, dest='it')
+        trResponse = translator.translate(inputText, dest='it')
     except Exception as retExc:
         logging.error(str(retExc))
-        return inputNews.summary
+        return inputText
     logging.debug(trResponse)
     if trResponse is None:
         logging.error("Unable to translate text")
-        return inputNews.summary
+        return inputText
     elif len(trResponse.text) < 10:
         logging.error("Translation was too short")
-        return inputNews.summary
+        return inputText
     return trResponse.text
     
 # Database preparation
@@ -247,6 +247,9 @@ def Main():
         logging.error("No news from DB")
         return
     logging.debug("Fetch: " + str(feedsFromDb))
+    # Monitor exceptions and report in case of multiple errors
+    excCnt = 0
+    excMsg = ""
     # Get news from feed
     for singleNews in parseNews(feedsFromDb):
         # Check if we already sent this message
@@ -254,10 +257,10 @@ def Main():
             logging.info("Sending: [" + singleNews.link + "]")
             # Prepare message to send
             try:
-                msgToSend = "\U0001F4E1 " + singleNews.title + \
+                msgToSend = "\U0001F4E1 " + TranslateText(singleNews.title) + \
                             "\n\n\U0000270F Autore: " + singleNews.author + \
                             "\n\U0001F4C5 Data: " + singleNews.date.strftime("%Y/%m/%d, %H:%M") + \
-                            "\n\n" + ReworkText(singleNews) + \
+                            "\n\n" + TranslateText(singleNews.summary) + \
                             "\n\n\U0001F517 Articolo completo: " + singleNews.link
                 if not dryRun:
                     telegramBot.send_message(getTargetChatId(), msgToSend, parse_mode="MARKDOWN")
@@ -271,6 +274,13 @@ def Main():
                 newsCnt += 1
             except Exception as retExc:
                 logging.error(str(retExc))
+                excCnt += 1
+                excMsg = str(retExc)
+        # Check errors count
+        if excCnt > 3:
+            logging.error("Too many errors, skipping this upgrade")
+            telegramBot.send_message(getAdminChatId(), "Too many errors, skipping this execution. Last error: `" + excMsg + "`")
+            break
         # This message was already posted
         else:
             logging.warning("Post at [" + singleNews.link + "] was already sent")
