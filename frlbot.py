@@ -18,8 +18,7 @@ import time
 import sys
 import getopt
 import threading
-# Import gpt4free class
-import g4f
+from googletrans import Translator
 
 # Specify logging level
 logging.basicConfig(level=logging.DEBUG)
@@ -169,18 +168,6 @@ def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
     newsList.sort(key=lambda news: news.date, reverse=True)
     return newsList
 
-# Loop per each AI provider
-def HandleAi(inputQuery: str, botProvider) -> str:
-    try:
-        gptResponse: str = g4f.ChatCompletion.create(model="gpt-3.5-turbo", provider=botProvider, messages=[{"role": "user", "content": inputQuery}])
-        if len(gptResponse) >= 10:
-            logging.debug("Response: " + gptResponse)
-    except Exception as retExc:
-        logging.error(str(retExc))
-        gptResponse = ""
-    finally:
-        return gptResponse
-
 # Handle GPT stuff
 def ReworkText(inputNews: newsFromFeed) -> str:
     # Check if skip AI
@@ -188,21 +175,21 @@ def ReworkText(inputNews: newsFromFeed) -> str:
         return inputNews.summary
     # Start AI rework
     logging.debug("Reworking: [" + inputNews.link + "]")
-    gptCommand = "Traduci questo testo in italiano se necessario, altrimenti fanne il riassunto: "
-    inputQuery = gptCommand + inputNews.summary
-    validResult = False
-    providersList = [g4f.Provider.GetGpt, g4f.Provider.DeepAi, g4f.Provider.Aichat]
-    for singleProvider in providersList:
-        gptResponse = HandleAi(inputQuery, singleProvider)
-        if len(gptResponse) > 10:
-            # Cleanup response from GPT if needed
-            regExQuery = re.compile(re.escape(gptCommand), re.IGNORECASE)
-            gptResponse = re.sub(r"(\[\^\d\^\])", "", re.sub(regExQuery, "", gptResponse))
-            return gptResponse
-    # If none have worked, return original text
-    if not validResult:
-        logging.error("Unable to process AI text rework")
+    translator = Translator()
+    trResponse = None
+    try:
+        trResponse = translator.translate(inputNews.summary, dest='it')
+    except Exception as retExc:
+        logging.error(str(retExc))
         return inputNews.summary
+    logging.debug(trResponse)
+    if trResponse is None:
+        logging.error("Unable to translate text")
+        return inputNews.summary
+    elif len(trResponse.text) < 10:
+        logging.error("Translation was too short")
+        return inputNews.summary
+    return trResponse.text
     
 # Database preparation
 def PrepareDb() -> None:
