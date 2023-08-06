@@ -114,12 +114,17 @@ class newsFromFeed(list):
         self.title = inputTitle.strip()
         self.date = dateutil.parser.parse(inputDate)
         self.author = inputAuthor.strip()
+        # Cut input text
+        if len(inputSummary > 100):
+            cutText: str = inputSummary[:100].strip() + " [...]"
+        else:
+            cutText: str = inputSummary.strip()
         # Remove HTML tags
         regExHtml = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
         # Remove "Read more"
         regExReadMore = re.compile(re.escape("read more"), re.IGNORECASE)
         # Parse summary
-        self.summary = re.sub(regExHtml, "", re.sub(regExReadMore, "", inputSummary.strip()))
+        self.summary = re.sub(regExHtml, "", re.sub(regExReadMore, "", cutText))
         self.link = inputLink.strip().lower()
         # Calculate checksum
         self.checksum = hashlib.md5(inputLink.encode('utf-8')).hexdigest()
