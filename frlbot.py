@@ -115,8 +115,8 @@ class newsFromFeed(list):
         self.date = dateutil.parser.parse(inputDate)
         self.author = inputAuthor.strip()
         # Cut input text
-        if len(inputSummary) > 100:
-            cutText: str = inputSummary[:100].strip() + " [...]"
+        if len(inputSummary) > 300:
+            cutText: str = inputSummary[:300].strip() + " [...]"
         else:
             cutText: str = inputSummary.strip()
         # Remove HTML tags
