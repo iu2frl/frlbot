@@ -505,7 +505,7 @@ if __name__ == "__main__":
                 elif splitMessage[1].isdigit():
                     deletedNews = RemoveOldNews(int(splitMessage[1]))
                     if deletedNews >= 0:
-                        telegramBot.reply_to(inputMessage, "Deleting `" + str(deletedNews) + "` news older than `" + str(splitMessage[1]) + "` days")
+                        telegramBot.reply_to(inputMessage, "Deleting [" + str(deletedNews) + "] news older than [" + str(splitMessage[1]) + "] days")
                     else:
                         telegramBot.reply_to(inputMessage, "Cannot delete older news, check log for error details")
                 else:
