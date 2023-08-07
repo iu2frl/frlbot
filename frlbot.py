@@ -119,12 +119,13 @@ class newsFromFeed(list):
         # Remove "Read more"
         regExReadMore = re.compile(re.escape("read more"), re.IGNORECASE)
         # Parse summary
-        noHtml = re.sub(regExHtml, "", re.sub(regExReadMore, "", inputSummary))
+        noHtml = re.sub(regExHtml, "", re.sub(regExReadMore, "", inputSummary.strip()))
         # Cut input text
         if len(noHtml) > 300:
-            cutText: str = noHtml[:300].strip() + " ..."
+            cutText: str = noHtml[:300] + " ..."
         else:
-            cutText: str = noHtml.strip()
+            cutText: str = noHtml
+        self.summary = cutText.strip()
         self.link = cutText.strip().lower()
         # Calculate checksum
         self.checksum = hashlib.md5(inputLink.encode('utf-8')).hexdigest()
