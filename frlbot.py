@@ -131,6 +131,14 @@ class newsFromFeed(list):
         self.checksum = hashlib.md5(self.link.encode('utf-8')).hexdigest()
         pass
 
+# Extract domain from URL
+def extract_domain(url):
+    pattern = r'https?://(?:www\.)?([^/]+)'
+    result = re.match(pattern, url)
+    if result:
+        return result.group(1)
+    return "anonymous"
+
 # Parse RSS feed
 def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
     # Get feeds from the list above
@@ -142,26 +150,32 @@ def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
     for singleFeed in feedsList:
         logging.debug("Processing [" + singleFeed["link"] + "]")
         # Old RSS format
-        if singleFeed["published"]:
+        if singleFeed["summary"]:
             # Check if valid content
             if len(re.sub(r"(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w\.-]*)", "", singleFeed["summary"])) <= 10:
                 logging.warning("Skipping [" + singleFeed["link"] + "], empty content")   
                 continue
             # Generate new article
             try:
-                newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], singleFeed["author"], singleFeed["summary"], singleFeed["link"])
+                if singleFeed["author"]:
+                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], singleFeed["author"], singleFeed["summary"], singleFeed["link"])
+                else:
+                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], extract_domain(singleFeed["link"]), singleFeed["summary"], singleFeed["link"])
                 newsList.append(newArticle)
             except Exception as retExc:
                 logging.warning("Cannot process [" + singleFeed["link"] + "], exception: " + str(retExc))
         # New RSS format
-        elif singleFeed["pubDate"]:
+        elif singleFeed["description"]:
             # Check if valid content
             if len(re.sub(r"(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w\.-]*)", "", singleFeed["description"])) <= 10:
                 logging.warning("Skipping [" + singleFeed["link"] + "], empty content")
                 continue
             # Generate new article
             try:
-                newArticle = newsFromFeed(singleFeed["title"], singleFeed["pubDate"], singleFeed["dc:creator"], singleFeed["description"], singleFeed["link"])
+                if singleFeed["dc:creator"]:
+                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["pubDate"], singleFeed["dc:creator"], singleFeed["description"], singleFeed["link"])
+                else:
+                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["pubDate"], extract_domain(singleFeed["link"]), singleFeed["description"], singleFeed["link"])
             except Exception as retExc:
                 logging.warning("Cannot process [" + singleFeed["link"] + "], exception: " + str(retExc))
             newsList.append(newArticle)
