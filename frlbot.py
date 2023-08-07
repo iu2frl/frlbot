@@ -223,6 +223,13 @@ def PrepareDb() -> None:
         logging.info("News table was generated successfully")
     except:
         logging.debug("News table already exists")
+    # Count sent articles
+    try:
+        dataFromDb = sqliteCursor.execute("SELECT checksum FROM news WHERE 1").fetchall()
+        logging.info("News table contains [" + str(len(dataFromDb)) + "] records")
+    except Exception as retExc:
+        logging.critical("Error while getting count of news records: " + str(retExc))
+        raise Exception(retExc)
     # Create feeds table
     try:
         sqliteCursor.execute("CREATE TABLE feeds(url)")
@@ -245,7 +252,7 @@ def PrepareDb() -> None:
             logging.error(retExc)
             return
     else:
-        logging.info("News table contains [" + str(len(dataFromDb)) + "] records")
+        logging.info("Feeds table contains [" + str(len(dataFromDb)) + "] records")
 
 # Get SQL Connector
 def GetSqlConn() -> sqlite3.Connection:
