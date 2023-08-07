@@ -9,7 +9,7 @@ import dateutil.parser
 import telebot
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 import hashlib
 import sqlite3
@@ -275,27 +275,31 @@ def Main():
         # Check if we already sent this message
         if sqlCon.cursor().execute("SELECT * FROM news WHERE checksum='" + singleNews.checksum + "'").fetchone() is None:
             logging.info("Sending: [" + singleNews.link + "]")
-            # Prepare message to send
-            try:
-                msgToSend = "\U0001F4E1 " + TranslateText(singleNews.title) + \
-                            "\n\n\U0000270F Autore: " + singleNews.author + \
-                            "\n\U0001F4C5 Data: " + singleNews.date.strftime("%Y/%m/%d, %H:%M") + \
-                            "\n\n" + TranslateText(singleNews.summary) + \
-                            "\n\n\U0001F517 Articolo completo: " + singleNews.link
-                if not dryRun:
-                    telegramBot.send_message(getTargetChatId(), msgToSend, parse_mode="MARKDOWN")
-                else:
-                    logging.info(msgToSend)
-                if not dryRun:
-                    # Store this article to DB
-                    logging.debug("Adding [" + singleNews.checksum + "] to store")
-                    sqlCon.cursor().execute("INSERT INTO news(date, checksum) VALUES(?, ?)", [singleNews.date, singleNews.checksum])
-                    sqlCon.commit()
-                newsCnt += 1
-            except Exception as retExc:
-                logging.error(str(retExc))
-                excCnt += 1
-                excMsg = str(retExc)
+            # Check if article is no more than 30 days
+            if singleNews.date.replace(tzinfo=None) - datetime.now().replace(tzinfo=None) > timedelta(days=30):
+                logging.warning("Article: [" + singleNews.link + "] is older than 30 days, skipping")
+            else:
+                # Prepare message to send
+                try:
+                    msgToSend = "\U0001F4E1 " + TranslateText(singleNews.title) + \
+                                "\n\n\U0000270F Autore: " + singleNews.author + \
+                                "\n\U0001F4C5 Data: " + singleNews.date.strftime("%Y/%m/%d, %H:%M") + \
+                                "\n\n" + TranslateText(singleNews.summary) + \
+                                "\n\n\U0001F517 Articolo completo: " + singleNews.link
+                    if not dryRun:
+                        telegramBot.send_message(getTargetChatId(), msgToSend, parse_mode="MARKDOWN")
+                    else:
+                        logging.info(msgToSend)
+                    if not dryRun:
+                        # Store this article to DB
+                        logging.debug("Adding [" + singleNews.checksum + "] to store")
+                        sqlCon.cursor().execute("INSERT INTO news(date, checksum) VALUES(?, ?)", [singleNews.date, singleNews.checksum])
+                        sqlCon.commit()
+                    newsCnt += 1
+                except Exception as retExc:
+                    logging.error(str(retExc))
+                    excCnt += 1
+                    excMsg = str(retExc)
         # Check errors count
         if excCnt > 3:
             logging.error("Too many errors, skipping this upgrade")
