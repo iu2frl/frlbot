@@ -265,10 +265,12 @@ def PrepareDb() -> None:
             return
     else:
         logging.info("Feeds table contains [" + str(len(dataFromDb)) + "] records")
+    # Close DB connection
+    sqliteConn.close()
 
 # Get SQL Connector
 def GetSqlConn() -> sqlite3.Connection:
-    return sqlite3.connect("store/frlbot.db")
+    return sqlite3.connect("store/frlbot.db", timeout=3)
 
 # Delete old SQLite records
 def RemoveOldNews(max_days: int = -1) -> int:
@@ -279,6 +281,7 @@ def RemoveOldNews(max_days: int = -1) -> int:
         sqlCon = GetSqlConn()
         oldNews = sqlCon.cursor().execute("SELECT date FROM news WHERE date <= date('now', '-" + str(max_days) + " day')").fetchall()
         sqlCon.cursor().execute("DELETE FROM news WHERE date <= date('now', '-" + str(max_days) + " day')")
+        sqlCon.close()
         return len(oldNews)
     except Exception as retExc:
         logging.error("Cannot delete older news. " + str(retExc))
@@ -298,6 +301,7 @@ def Main():
     feedsFromDb = [x[0] for x in sqlCon.cursor().execute("SELECT url FROM feeds WHERE 1").fetchall()]
     if feedsFromDb is None:
         logging.error("No news from DB")
+        sqlCon.close()
         return
     logging.debug("Fetch: " + str(feedsFromDb))
     # Monitor exceptions and report in case of multiple errors
@@ -344,6 +348,8 @@ def Main():
         # Stop execution after sending x elements
         if newsCnt >= maxNews:
             break
+    # Close DB connection
+    sqlCon.close()
 
 # Check if force send
 def CheckArgs(argv) -> list[bool, bool, bool]:
@@ -411,6 +417,7 @@ if __name__ == "__main__":
                 global telegramBot
                 sqlCon = GetSqlConn()
                 feedsFromDb = [(x[0], x[1]) for x in sqlCon.cursor().execute("SELECT rowid, url FROM feeds WHERE 1").fetchall()]
+                sqlCon.close()
                 if len(feedsFromDb) < 1:
                     telegramBot.reply_to(inputMessage, "No URLs in the url table")
                 else:
@@ -435,7 +442,6 @@ if __name__ == "__main__":
                         return
                     # Check if feed already exists
                     if sqlCon.execute("SELECT * FROM feeds WHERE url=?", [splitText[1]]).fetchone() is not None:
-                        
                         logging.warning("Duplicate URL [" + splitText[1] + "]")
                         telegramBot.reply_to(inputMessage, "URL exists in the DB")
                         return
@@ -452,6 +458,8 @@ if __name__ == "__main__":
                     telegramBot.reply_to(inputMessage, "Expecting only one argument")
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+            # Close DB connection
+            sqlCon.close()
         # Remove feed from the store
         @telegramBot.message_handler(content_types=["text"], commands=['rmfeed'])
         def HandleRemoveMessage(inputMessage: telebot.types.Message):
@@ -464,12 +472,12 @@ if __name__ == "__main__":
                         try:
                             sqlCon.execute("DELETE FROM feeds WHERE rowid=?", [splitText[1]])
                             sqlCon.commit()
+                            sqlCon.close()
                             telegramBot.reply_to(inputMessage, "Element was removed successfully!")
                         except Exception as retExc:
                             telegramBot.reply_to(inputMessage, retExc)
                     else:
                         telegramBot.reply_to(inputMessage, "[" + splitText[1] +"] is not a valid numeric index")
-                    
                 else:
                     telegramBot.reply_to(inputMessage, "Expecting only one argument")
             else:
