@@ -83,7 +83,7 @@ def getTargetChatId() -> int:
 # Get target chat from ENV
 def getAdminChatId() -> int:
     if dryRun:
-        return ""
+        return -1
     # Read API Token from environment variables
     BOT_TARGET: str = os.environ.get('BOT_ADMIN')
     if (not BOT_TARGET):
@@ -91,6 +91,18 @@ def getAdminChatId() -> int:
         return -1
     # Return token
     return int(BOT_TARGET)
+
+# Get maximum news age
+def getMaxNewsDays() -> int:
+    if dryRun:
+        return 30
+    # Read API Token from environment variables
+    MAX_AGE: str = os.environ.get('MAX_NEWS_AGE')
+    if (not MAX_AGE):
+        logging.warning("MAX_NEWS_AGE is empty, falling back to 30")
+        return 30
+    # Return token
+    return int(MAX_AGE)
 
 # Get how many news we should post at each loop
 def getMaxNewsCnt() -> int:
@@ -258,6 +270,19 @@ def PrepareDb() -> None:
 def GetSqlConn() -> sqlite3.Connection:
     return sqlite3.connect("store/frlbot.db")
 
+# Delete old SQLite records
+def RemoveOldNews(max_days: int = -1) -> bool:
+    if max_days == -1:
+        max_days = getMaxNewsDays()
+    try:
+        # Get SQL cursor
+        sqlCon = GetSqlConn()
+        sqlCon.cursor().execute("DELETE FROM news WHERE date <= date('now', '-" + str(max_days) + " day')")
+        return True
+    except Exception as retExc:
+        logging.error("Cannot delete older news. " + str(retExc))
+        return False
+
 # Main code
 def Main():
     logging.info("Starting bot")
@@ -283,7 +308,7 @@ def Main():
         if sqlCon.cursor().execute("SELECT * FROM news WHERE checksum='" + singleNews.checksum + "'").fetchone() is None:
             logging.info("Sending: [" + singleNews.link + "]")
             # Check if article is no more than 30 days
-            if singleNews.date.replace(tzinfo=None) - datetime.now().replace(tzinfo=None) > timedelta(days=30):
+            if datetime.now().replace(tzinfo=None) - singleNews.date.replace(tzinfo=None) > timedelta(days=30):
                 logging.warning("Article: [" + singleNews.link + "] is older than 30 days, skipping")
             else:
                 # Prepare message to send
@@ -335,6 +360,9 @@ def CheckArgs(argv) -> list[bool, bool, bool]:
     logging.info("DryRun: " + str(dryRun) + " - ForceRun: " + str(forceRun) + " - NoAI: " + str(noAi))
     return dryRun, forceRun, noAi
 
+# Cleanup old news
+schedule.every().day.at("01:00").do(RemoveOldNews,)
+# Execute bot news
 schedule.every().day.at("06:00").do(Main, )
 schedule.every().day.at("07:00").do(Main, )
 schedule.every().day.at("08:00").do(Main, )
@@ -452,6 +480,21 @@ if __name__ == "__main__":
                 global telegramBot
                 telegramBot.reply_to(inputMessage, "Forcing bot execution")
                 Main()
+            else:
+                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+        @telegramBot.message_handler(content_types=["text"], commands=['rmoldnews'])
+        def HandleOldNewsDelete(inputMessage: telebot.types.Message):
+            if inputMessage.from_user.id == getAdminChatId():
+                logging.debug("Manual news deletion requested")
+                global telegramBot
+                splitMessage = inputMessage.text.split(" ")
+                if len(splitMessage) != 2:
+                    telegramBot.reply_to(inputMessage, "Expecting only one argument")
+                elif splitMessage[1].isdigit():
+                    telegramBot.reply_to(inputMessage, "Deleting news older than [" + str(splitMessage[1]) + "] days")
+                    RemoveOldNews(int(splitMessage[1]))
+                else:
+                    telegramBot.reply_to(inputMessage,"Invalid number of days to delete.")
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
     # Prepare DB object
