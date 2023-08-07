@@ -362,7 +362,7 @@ def CheckArgs(argv) -> list[bool, bool, bool]:
     return dryRun, forceRun, noAi
 
 # Cleanup old news
-schedule.every().day.at("01:00").do(RemoveOldNews,)
+schedule.every().day.at("01:00").do(RemoveOldNews, )
 # Execute bot news
 schedule.every().day.at("06:00").do(Main, )
 schedule.every().day.at("07:00").do(Main, )
@@ -494,11 +494,11 @@ if __name__ == "__main__":
                 elif splitMessage[1].isdigit():
                     deletedNews = RemoveOldNews(int(splitMessage[1]))
                     if deletedNews >= 0:
-                        telegramBot.reply_to(inputMessage, "Deleting [" + str(deletedNews) + "] news older than [" + str(splitMessage[1]) + "] days")
+                        telegramBot.reply_to(inputMessage, "Deleting `" + str(deletedNews) + "` news older than `" + str(splitMessage[1]) + "` days")
                     else:
                         telegramBot.reply_to(inputMessage, "Cannot delete older news, check log for error details")
                 else:
-                    telegramBot.reply_to(inputMessage,"Invalid number of days to delete.")
+                    telegramBot.reply_to(inputMessage,"Invalid number of days to delete")
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
     # Prepare DB object
