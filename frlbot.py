@@ -281,6 +281,7 @@ def RemoveOldNews(max_days: int = -1) -> int:
         sqlCon = GetSqlConn()
         oldNews = sqlCon.cursor().execute("SELECT date FROM news WHERE date <= date('now', '-" + str(max_days) + " day')").fetchall()
         sqlCon.cursor().execute("DELETE FROM news WHERE date <= date('now', '-" + str(max_days) + " day')")
+        sqlCon.commit()
         sqlCon.close()
         return len(oldNews)
     except Exception as retExc:
