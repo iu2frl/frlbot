@@ -126,9 +126,9 @@ class newsFromFeed(list):
         else:
             cutText: str = noHtml
         self.summary = cutText.strip()
-        self.link = cutText.strip().lower()
+        self.link = inputLink.strip().lower()
         # Calculate checksum
-        self.checksum = hashlib.md5(inputLink.encode('utf-8')).hexdigest()
+        self.checksum = hashlib.md5(self.link.encode('utf-8')).hexdigest()
         pass
 
 # Parse RSS feed
