@@ -474,6 +474,7 @@ if __name__ == "__main__":
                     telegramBot.reply_to(inputMessage, "Expecting only one argument")
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+        # Force bot execution
         @telegramBot.message_handler(content_types=["text"], commands=['force'])
         def HandleForceMessage(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
@@ -483,6 +484,7 @@ if __name__ == "__main__":
                 Main()
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+        # Remove old news
         @telegramBot.message_handler(content_types=["text"], commands=['rmoldnews'])
         def HandleOldNewsDelete(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
