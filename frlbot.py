@@ -271,17 +271,18 @@ def GetSqlConn() -> sqlite3.Connection:
     return sqlite3.connect("store/frlbot.db")
 
 # Delete old SQLite records
-def RemoveOldNews(max_days: int = -1) -> bool:
+def RemoveOldNews(max_days: int = -1) -> int:
     if max_days == -1:
         max_days = getMaxNewsDays()
     try:
         # Get SQL cursor
         sqlCon = GetSqlConn()
+        oldNews = sqlCon.cursor().execute("SELECT date FROM news WHERE date <= date('now', '-" + str(max_days) + " day')").fetchall()
         sqlCon.cursor().execute("DELETE FROM news WHERE date <= date('now', '-" + str(max_days) + " day')")
-        return True
+        return len(oldNews)
     except Exception as retExc:
         logging.error("Cannot delete older news. " + str(retExc))
-        return False
+        return -1
 
 # Main code
 def Main():
@@ -491,8 +492,11 @@ if __name__ == "__main__":
                 if len(splitMessage) != 2:
                     telegramBot.reply_to(inputMessage, "Expecting only one argument")
                 elif splitMessage[1].isdigit():
-                    telegramBot.reply_to(inputMessage, "Deleting news older than [" + str(splitMessage[1]) + "] days")
-                    RemoveOldNews(int(splitMessage[1]))
+                    deletedNews = RemoveOldNews(int(splitMessage[1]))
+                    if deletedNews >= 0:
+                        telegramBot.reply_to(inputMessage, "Deleting [" + str(deletedNews) + "] news older than [" + str(splitMessage[1]) + "] days")
+                    else:
+                        telegramBot.reply_to(inputMessage, "Cannot delete older news, check log for error details")
                 else:
                     telegramBot.reply_to(inputMessage,"Invalid number of days to delete.")
             else:
