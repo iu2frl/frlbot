@@ -122,7 +122,7 @@ class newsFromFeed(list):
         noHtml = re.sub(regExHtml, "", re.sub(regExReadMore, "", inputSummary))
         # Cut input text
         if len(noHtml) > 300:
-            cutText: str = noHtml[:300].strip() + " [...]"
+            cutText: str = noHtml[:300].strip() + " ..."
         else:
             cutText: str = noHtml.strip()
         self.link = cutText.strip().lower()
