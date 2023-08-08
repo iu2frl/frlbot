@@ -97,16 +97,15 @@ def getMaxNewsDays() -> int:
     if dryRun:
         return 30
     # Read API Token from environment variables
-    MAX_AGE: str = os.environ.get('MAX_NEWS_AGE')
-    if (not MAX_AGE):
-        logging.warning("MAX_NEWS_AGE is empty, falling back to 30")
-        return 30
-    # Return token
-    return int(MAX_AGE)
+    return int(os.getenv('MAX_NEWS_AGE', default=30))
 
 # Get how many news we should post at each loop
 def getMaxNewsCnt() -> int:
-    return int(os.getenv('NEWS_COUNT', default=2))
+    return int(os.getenv('NEWS_COUNT', default=1))
+
+# Get post send interval
+def getPostInterval() -> int:
+    return int(os.getenv('POST_INTERVAL', default=41))
 
 # Bot initialization
 def InitializeBot():
@@ -280,6 +279,7 @@ def RemoveOldNews(max_days: int = -1) -> int:
         # Get SQL cursor
         sqlCon = GetSqlConn()
         oldNews = sqlCon.cursor().execute("SELECT date FROM news WHERE date <= date('now', '-" + str(max_days) + " day')").fetchall()
+        logging.info("Removing [" + str(len(oldNews)) + "] old news from DB")
         sqlCon.cursor().execute("DELETE FROM news WHERE date <= date('now', '-" + str(max_days) + " day')")
         sqlCon.commit()
         sqlCon.close()
@@ -371,23 +371,7 @@ def CheckArgs(argv) -> list[bool, bool, bool]:
 # Cleanup old news
 schedule.every().day.at("01:00").do(RemoveOldNews, )
 # Execute bot news
-schedule.every().day.at("06:00").do(Main, )
-schedule.every().day.at("07:00").do(Main, )
-schedule.every().day.at("08:00").do(Main, )
-schedule.every().day.at("09:00").do(Main, )
-schedule.every().day.at("10:00").do(Main, )
-schedule.every().day.at("11:00").do(Main, )
-schedule.every().day.at("12:00").do(Main, )
-schedule.every().day.at("13:00").do(Main, )
-schedule.every().day.at("14:00").do(Main, )
-schedule.every().day.at("15:00").do(Main, )
-schedule.every().day.at("16:00").do(Main, )
-schedule.every().day.at("17:00").do(Main, )
-schedule.every().day.at("18:00").do(Main, )
-schedule.every().day.at("19:00").do(Main, )
-schedule.every().day.at("20:00").do(Main, )
-schedule.every().day.at("21:00").do(Main, )
-schedule.every().day.at("22:00").do(Main, )
+schedule.every(getPostInterval()).minutes.do(Main, )
 
 def SchedulerLoop():
     logging.info("Starting scheduler loop")
