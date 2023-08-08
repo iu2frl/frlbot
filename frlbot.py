@@ -447,7 +447,7 @@ if __name__ == "__main__":
                 logging.debug("Ignoring [" + inputMessage.text + "] message from [" + str(inputMessage.from_user.id) + "]")
             # Close DB connection
             sqlCon.close()
-        # Remove feed from the store
+        # Remove feed from the stores
         @telegramBot.message_handler(content_types=["text"], commands=['rmfeed'])
         def HandleRemoveMessage(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
