@@ -412,7 +412,7 @@ if __name__ == "__main__":
                         textMessage += str(singleElement[0]) + ": " + singleElement[1] + "\n"
                     telegramBot.reply_to(inputMessage, textMessage)
             else:
-                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+                logging.debug("Ignoring [" + inputMessage.text + "] message from [" + str(inputMessage.from_user.id) + "]")
         # Add new feed to the store   
         @telegramBot.message_handler(content_types=["text"], commands=['addfeed'])
         def HandleAddMessage(inputMessage: telebot.types.Message):
@@ -444,7 +444,7 @@ if __name__ == "__main__":
                     logging.warning("Invalid AddFeed arguments [" + inputMessage.text + "]")
                     telegramBot.reply_to(inputMessage, "Expecting only one argument")
             else:
-                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+                logging.debug("Ignoring [" + inputMessage.text + "] message from [" + str(inputMessage.from_user.id) + "]")
             # Close DB connection
             sqlCon.close()
         # Remove feed from the store
@@ -469,7 +469,7 @@ if __name__ == "__main__":
                 else:
                     telegramBot.reply_to(inputMessage, "Expecting only one argument")
             else:
-                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+                logging.debug("Ignoring [" + inputMessage.text + "] message from [" + str(inputMessage.from_user.id) + "]")
         # Force bot execution
         @telegramBot.message_handler(content_types=["text"], commands=['force'])
         def HandleForceMessage(inputMessage: telebot.types.Message):
@@ -479,7 +479,7 @@ if __name__ == "__main__":
                 telegramBot.reply_to(inputMessage, "Forcing bot execution")
                 Main()
             else:
-                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+                logging.debug("Ignoring [" + inputMessage.text + "] message from [" + str(inputMessage.from_user.id) + "]")
         # Remove old news
         @telegramBot.message_handler(content_types=["text"], commands=['rmoldnews'])
         def HandleOldNewsDelete(inputMessage: telebot.types.Message):
@@ -498,7 +498,7 @@ if __name__ == "__main__":
                 else:
                     telegramBot.reply_to(inputMessage,"Invalid number of days to delete")
             else:
-                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+                logging.debug("Ignoring [" + inputMessage.text + "] message from [" + str(inputMessage.from_user.id) + "]")
         # Remove old news
         @telegramBot.message_handler(content_types=["text"], commands=['sqlitebackup'])
         def HandleSqliteBackup(inputMessage: telebot.types.Message):
@@ -514,7 +514,7 @@ if __name__ == "__main__":
                 except Exception as retExc:
                     telegramBot.reply_to(inputMessage, "Error: " + str(retExc))
             else:
-                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+                logging.debug("Ignoring [" + inputMessage.text + "] message from [" + str(inputMessage.from_user.id) + "]")
     # Prepare DB object
     PrepareDb()
     if forceRun:
