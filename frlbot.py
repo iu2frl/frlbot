@@ -399,6 +399,7 @@ if __name__ == "__main__":
         @telegramBot.message_handler(content_types=["text"], commands=['urllist'])
         def HandleUrlListMessage(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
+                logging.debug("URL list requested from [" + str(inputMessage.from_user.id) + "]")
                 global telegramBot
                 sqlCon = GetSqlConn()
                 feedsFromDb = [(x[0], x[1]) for x in sqlCon.cursor().execute("SELECT rowid, url FROM feeds WHERE 1").fetchall()]
@@ -425,6 +426,7 @@ if __name__ == "__main__":
                         logging.warning("Invalid URL [" + splitText[1] + "]")
                         telegramBot.reply_to(inputMessage, "Invalid URL format")
                         return
+                    logging.debug("Feed add requested from [" + str(inputMessage.from_user.id) + "]")
                     # Check if feed already exists
                     if sqlCon.execute("SELECT * FROM feeds WHERE url=?", [splitText[1]]).fetchone() is not None:
                         logging.warning("Duplicate URL [" + splitText[1] + "]")
@@ -454,6 +456,7 @@ if __name__ == "__main__":
                 splitText = inputMessage.text.split(" ")
                 if (len(splitText) == 2):
                     if (splitText[1].isnumeric()):
+                        logging.debug("Feed deletion requested from [" + srt(inputMessage.from_user.id) + "]")
                         try:
                             sqlCon.execute("DELETE FROM feeds WHERE rowid=?", [splitText[1]])
                             sqlCon.commit()
@@ -471,7 +474,7 @@ if __name__ == "__main__":
         @telegramBot.message_handler(content_types=["text"], commands=['force'])
         def HandleForceMessage(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
-                logging.debug("Manual bot execution requested")
+                logging.debug("Manual bot execution requested from [" + str(inputMessage.from_user.id) + "]")
                 global telegramBot
                 telegramBot.reply_to(inputMessage, "Forcing bot execution")
                 Main()
@@ -481,7 +484,7 @@ if __name__ == "__main__":
         @telegramBot.message_handler(content_types=["text"], commands=['rmoldnews'])
         def HandleOldNewsDelete(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
-                logging.debug("Manual news deletion requested")
+                logging.debug("Manual news deletion requested from [" + str(inputMessage.from_user.id) + "]")
                 global telegramBot
                 splitMessage = inputMessage.text.split(" ")
                 if len(splitMessage) != 2:
@@ -494,6 +497,22 @@ if __name__ == "__main__":
                         telegramBot.reply_to(inputMessage, "Cannot delete older news, check log for error details")
                 else:
                     telegramBot.reply_to(inputMessage,"Invalid number of days to delete")
+            else:
+                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+        # Remove old news
+        @telegramBot.message_handler(content_types=["text"], commands=['sqlitebackup'])
+        def HandleSqliteBackup(inputMessage: telebot.types.Message):
+            if inputMessage.from_user.id == getAdminChatId():
+                logging.debug("Manual DB backup requested from [" + str(inputMessage.from_user.id) + "]")
+                global telegramBot
+                try:
+                    dbFile = open("store/frlbot.db", "rb")
+                    telegramBot.send_document(chat_id=inputMessage.chat.id,
+                                            document=dbFile,
+                                            reply_to_message_id=inputMessage.id,
+                                            caption="SQLite backup at " + str(datetime.now()))
+                except Exception as retExc:
+                    telegramBot.reply_to(inputMessage, "Error: " + str(retExc))
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
     # Prepare DB object
