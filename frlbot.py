@@ -125,7 +125,7 @@ class newsFromFeed(list):
 
     def __init__(self, inputTitle: str, inputDate: str, inputAuthor: str, inputSummary: str, inputLink: str = "") -> None:
         self.title = inputTitle.strip()
-        self.date = dateutil.parser.parse(inputDate)
+        self.date = dateutil.parser.parse(inputDate).replace(tzinfo=None)
         self.author = inputAuthor.strip()
         # Remove HTML tags
         regExHtml = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
@@ -155,7 +155,13 @@ def extract_domain(url):
 # Parse RSS feed
 def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
     # Get feeds from the list above
-    fetchFeed = [feedparser.parse(url)['entries'] for url in urlsList]
+    fetchFeed = []
+    for url in urlsList:
+        logging.debug("Retrieving feed at [" + url + "]")
+        try:
+            fetchFeed.append(feedparser.parse(url)["entries"])
+        except Exception as retExc:
+            logging.error("Cannot retrieve feed at [" + url + "]. Error message: " + str(retExc))
     feedsList = [item for feed in fetchFeed for item in feed]
     # Prepare list of news
     newsList: list[newsFromFeed] = []
@@ -306,7 +312,7 @@ def Main():
         logging.error("No news from DB")
         sqlCon.close()
         return
-    logging.debug("Fetch: " + str(feedsFromDb))
+    logging.debug("Fetching [" + str(len(feedsFromDb)) + "] feeds")
     # Monitor exceptions and report in case of multiple errors
     excCnt = 0
     excMsg = ""
@@ -318,6 +324,8 @@ def Main():
             # Check if article is no more than 30 days
             if datetime.now().replace(tzinfo=None) - singleNews.date.replace(tzinfo=None) > timedelta(days=30):
                 logging.warning("Article: [" + singleNews.link + "] is older than 30 days, skipping")
+            elif singleNews.date.replace(tzinfo=None) > datetime.now().replace(tzinfo=None):
+                logging.warning("Article: [" + singleNews.link + "] is coming from the future?!")
             else:
                 # Prepare message to send
                 try:
@@ -340,14 +348,14 @@ def Main():
                     logging.error(str(retExc))
                     excCnt += 1
                     excMsg = str(retExc)
+        # This message was already posted
+        else:
+            logging.warning("Post at [" + singleNews.link + "] was already sent")
         # Check errors count
         if excCnt > 3:
             logging.error("Too many errors, skipping this upgrade")
             telegramBot.send_message(getAdminChatId(), "Too many errors, skipping this execution. Last error: `" + excMsg + "`")
             break
-        # This message was already posted
-        else:
-            logging.warning("Post at [" + singleNews.link + "] was already sent")
         # Stop execution after sending x elements
         if newsCnt >= maxNews:
             break
@@ -622,7 +630,10 @@ if __name__ == "__main__":
         sys.exit(0)
     # Start async execution
     logging.info("Starting main loop")
-    telegramThread = threading.Thread(target=TelegramLoop, name="TelegramLoop")
-    telegramThread.start()
-    SchedulerLoop()
+    if not dryRun:
+        telegramThread = threading.Thread(target=TelegramLoop, name="TelegramLoop")
+        telegramThread.start()
+        SchedulerLoop()
+    else:
+        Main()
     
