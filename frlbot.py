@@ -474,7 +474,7 @@ if __name__ == "__main__":
                 splitText = inputMessage.text.split(" ")
                 if (len(splitText) == 2):
                     if (splitText[1].isnumeric()):
-                        logging.debug("Feed deletion requested from [" + srt(inputMessage.from_user.id) + "]")
+                        logging.debug("Feed deletion requested from [" + str(inputMessage.from_user.id) + "]")
                         try:
                             sqlCon.execute("DELETE FROM feeds WHERE rowid=?", [splitText[1]])
                             sqlCon.commit()
@@ -555,8 +555,63 @@ if __name__ == "__main__":
                             continue
                 # Commit changes to DB
                 sqlCon.commit()
+                sqlCon.close()
                 # Send reply
                 telegramBot.reply_to(inputMessage, "[" + str(newFeedsCnt) + "] out of [" + str(len(splitCsv)) + "] feeds were added to DB")
+            else:
+                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+        # Perform DB cleanup (duplicate and invalid)
+        @telegramBot.message_handler(content_types=["text"], commands=['dbcleanup'])
+        def HandleDbCleanup(inputMessage: telebot.types.Message):
+            if inputMessage.from_user.id == getAdminChatId():
+                logging.debug("Peforming news cleanup")
+                global telegramBot
+                telegramBot.reply_to(inputMessage, "Performing cleanup, please be patient...")
+                sqlCon = GetSqlConn()
+                feedsFromDb = [(x[0], x[1]) for x in sqlCon.cursor().execute("SELECT rowid, url FROM feeds WHERE 1").fetchall()]
+                duplicatesCnt = 0
+                invalidsCnt = 0
+                for singleElement in feedsFromDb:
+                    cleanUrl = singleElement[1].split("://")[1].replace("www.", "")
+                    logging.debug("Checking for duplicate [" + cleanUrl + "]")
+                    # Query to check for duplicate URLs with a different rowid
+                    query = "SELECT rowid FROM feeds WHERE url LIKE ? AND rowid != ?"
+                    # Execute the query
+                    duplicates = sqlCon.cursor().execute(query, (cleanUrl, singleElement[0])).fetchall()
+                    if duplicates:
+                        # Remove duplicate
+                        logging.info("Removing duplicate [" + singleElement[1] + "] from DB")
+                        sqlCon.execute("DELETE FROM feeds WHERE rowid=?", [singleElement[0]])
+                        sqlCon.commit()
+                        duplicatesCnt += 1
+                    else:
+                        # Check if feed is valid
+                        if not ValidXml(singleElement[1]):
+                            # Remove duplicate
+                            logging.info("Removing invalid [" + singleElement[1] + "] from DB")
+                            sqlCon.execute("DELETE FROM feeds WHERE rowid=?", [singleElement[0]])
+                            sqlCon.commit()
+                            invalidsCnt += 1
+                # Close DB connection
+                sqlCon.close()
+                # Return output
+                telegramBot.reply_to(inputMessage, "Removed [" + str(invalidsCnt) + "] invalid and [" + str(duplicatesCnt) + "] duplicated RSS feeds")
+            else:
+                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+        # Perform DB backup
+        @telegramBot.message_handler(content_types=["text"], commands=['sqlitebackup'])
+        def HandleSqliteBackup(inputMessage: telebot.types.Message):
+            if inputMessage.from_user.id == getAdminChatId():
+                logging.debug("Manual DB backup requested from [" + str(inputMessage.from_user.id) + "]")
+                global telegramBot
+                try:
+                    dbFile = open("store/frlbot.db", "rb")
+                    telegramBot.send_document(chat_id=inputMessage.chat.id,
+                                            document=dbFile,
+                                            reply_to_message_id=inputMessage.id,
+                                            caption="SQLite backup at " + str(datetime.now()))
+                except Exception as retExc:
+                    telegramBot.reply_to(inputMessage, "Error: " + str(retExc))
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
     # Prepare DB object
