@@ -6,3 +6,4 @@ frlbot/
 *.tar.gz
 docker/
 store/
+test.py

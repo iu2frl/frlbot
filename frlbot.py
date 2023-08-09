@@ -577,7 +577,7 @@ if __name__ == "__main__":
                     # Query to check for duplicate URLs with a different rowid
                     query = "SELECT rowid FROM feeds WHERE url LIKE ? AND rowid != ?"
                     # Execute the query
-                    duplicates = sqlCon.cursor().execute(query, (cleanUrl, singleElement[0])).fetchall()
+                    duplicates = sqlCon.cursor().execute(query, ("%" + cleanUrl + "%", singleElement[0])).fetchall()
                     if duplicates:
                         # Remove duplicate
                         logging.info("Removing duplicate [" + singleElement[1] + "] from DB")
