@@ -9,3 +9,4 @@ pycryptodome
 schedule
 asyncio
 googletrans==3.1.0a0
+requests

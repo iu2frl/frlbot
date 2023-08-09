@@ -19,6 +19,8 @@ import sys
 import getopt
 import threading
 from googletrans import Translator
+import requests
+import xml.dom.minidom
 
 # Specify logging level
 logging.basicConfig(level=logging.DEBUG)
@@ -368,6 +370,15 @@ def CheckArgs(argv) -> list[bool, bool, bool]:
     logging.info("DryRun: " + str(dryRun) + " - ForceRun: " + str(forceRun) + " - NoAI: " + str(noAi))
     return dryRun, forceRun, noAi
 
+# Check if valid XML
+def ValidXml(inputUrl: str) -> bool:
+    try:
+        getRes = requests.get(inputUrl)
+        xml.dom.minidom.parseString(getRes.content)
+        return True
+    except:
+        return False
+
 # Cleanup old news
 schedule.every().day.at("01:00").do(RemoveOldNews, )
 # Execute bot news
@@ -424,8 +435,12 @@ if __name__ == "__main__":
                 else:
                     textMessage: str = ""
                     for singleElement in feedsFromDb:
+                        # Check if message is longer than max length
+                        if len(textMessage) + len(singleElement[1]) + 10 >= 4096:
+                            telegramBot.send_message(inputMessage.from_user.id, textMessage)
+                            textMessage = ""
                         textMessage += str(singleElement[0]) + ": " + singleElement[1] + "\n"
-                    telegramBot.reply_to(inputMessage, textMessage)
+                    telegramBot.send_message(inputMessage.from_user.id, textMessage)
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
         # Add new feed to the store   
@@ -449,9 +464,12 @@ if __name__ == "__main__":
                     # Add it to the store
                     try:
                         logging.info("Adding [" + splitText[1] + "] to DB")
-                        sqlCon.execute("INSERT INTO feeds(url) VALUES(?)", [splitText[1]])
-                        sqlCon.commit()
-                        telegramBot.reply_to(inputMessage, "Added successfully!")
+                        if ValidXml(splitText[1]):
+                            sqlCon.execute("INSERT INTO feeds(url) VALUES(?)", [splitText[1]])
+                            sqlCon.commit()
+                            telegramBot.reply_to(inputMessage, "Added successfully!")
+                        else:
+                            telegramBot.reply_to(inputMessage, "RSS feed cannot be validated (invalid syntax or unreachable)")
                     except Exception as retExc:
                         telegramBot.reply_to(inputMessage, retExc)
                 else:
@@ -512,6 +530,46 @@ if __name__ == "__main__":
                     telegramBot.reply_to(inputMessage,"Invalid number of days to delete")
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+        # Add from CSV list
+        @telegramBot.message_handler(content_types=["text"], commands=['addcsv'])
+        def HandleAddCsvList(inputMessage: telebot.types.Message):
+            if inputMessage.from_user.id == getAdminChatId():
+                logging.debug("Adding news from CSV list")
+                global telegramBot
+                sqlCon = GetSqlConn()
+                splitMessage = inputMessage.text.split("/addcsv")
+                # Invalid syntax
+                if len(splitMessage) <= 1:
+                    telegramBot.reply_to(inputMessage, "Missing CSV list")
+                    return
+                splitCsv = splitMessage[1].split(",")
+                # Not enough elements
+                if len(splitCsv) <= 1:
+                    telegramBot.reply_to(inputMessage, "Expecting more than 1 value in CSV format")
+                    return
+                telegramBot.reply_to(inputMessage, "Processing, please be patient...")
+                newFeedsCnt = 0
+                for singleUrl in splitCsv:
+                    # Clean input string
+                    singleUrl = singleUrl.strip()
+                    # Check if feed already exists
+                    if sqlCon.execute("SELECT * FROM feeds WHERE url=?", [singleUrl]).fetchone() is not None:
+                        logging.warning("Duplicate URL [" + singleUrl + "]")
+                    else:
+                        try:
+                            logging.info("Adding [" + singleUrl + "] to DB")
+                            if ValidXml(singleUrl):
+                                sqlCon.execute("INSERT INTO feeds(url) VALUES(?)", [singleUrl])
+                                newFeedsCnt += 1
+                                logging.debug("Added [" + singleUrl + "] to DB")
+                            else:
+                                logging.warning("RSS feed [" + singleUrl + "] cannot be validated")
+                        except Exception as retExc:
+                            continue
+                # Commit changes to DB
+                sqlCon.commit()
+                # Send reply
+                telegramBot.reply_to(inputMessage, "[" + str(newFeedsCnt) + "] out of [" + str(len(splitCsv)) + "] feeds were added to DB")
     # Prepare DB object
     PrepareDb()
     if forceRun:
