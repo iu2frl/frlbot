@@ -99,16 +99,15 @@ def getMaxNewsDays() -> int:
     if dryRun:
         return 30
     # Read API Token from environment variables
-    MAX_AGE: str = os.environ.get('MAX_NEWS_AGE')
-    if (not MAX_AGE):
-        logging.warning("MAX_NEWS_AGE is empty, falling back to 30")
-        return 30
-    # Return token
-    return int(MAX_AGE)
+    return int(os.getenv('MAX_NEWS_AGE', default=30))
 
 # Get how many news we should post at each loop
 def getMaxNewsCnt() -> int:
-    return int(os.getenv('NEWS_COUNT', default=2))
+    return int(os.getenv('NEWS_COUNT', default=1))
+
+# Get post send interval
+def getPostInterval() -> int:
+    return int(os.getenv('POST_INTERVAL', default=41))
 
 # Bot initialization
 def InitializeBot():
@@ -282,6 +281,7 @@ def RemoveOldNews(max_days: int = -1) -> int:
         # Get SQL cursor
         sqlCon = GetSqlConn()
         oldNews = sqlCon.cursor().execute("SELECT date FROM news WHERE date <= date('now', '-" + str(max_days) + " day')").fetchall()
+        logging.info("Removing [" + str(len(oldNews)) + "] old news from DB")
         sqlCon.cursor().execute("DELETE FROM news WHERE date <= date('now', '-" + str(max_days) + " day')")
         sqlCon.commit()
         sqlCon.close()
@@ -382,23 +382,7 @@ def ValidXml(inputUrl: str) -> bool:
 # Cleanup old news
 schedule.every().day.at("01:00").do(RemoveOldNews, )
 # Execute bot news
-schedule.every().day.at("06:00").do(Main, )
-schedule.every().day.at("07:00").do(Main, )
-schedule.every().day.at("08:00").do(Main, )
-schedule.every().day.at("09:00").do(Main, )
-schedule.every().day.at("10:00").do(Main, )
-schedule.every().day.at("11:00").do(Main, )
-schedule.every().day.at("12:00").do(Main, )
-schedule.every().day.at("13:00").do(Main, )
-schedule.every().day.at("14:00").do(Main, )
-schedule.every().day.at("15:00").do(Main, )
-schedule.every().day.at("16:00").do(Main, )
-schedule.every().day.at("17:00").do(Main, )
-schedule.every().day.at("18:00").do(Main, )
-schedule.every().day.at("19:00").do(Main, )
-schedule.every().day.at("20:00").do(Main, )
-schedule.every().day.at("21:00").do(Main, )
-schedule.every().day.at("22:00").do(Main, )
+schedule.every(getPostInterval()).minutes.do(Main, )
 
 def SchedulerLoop():
     logging.info("Starting scheduler loop")
@@ -426,6 +410,7 @@ if __name__ == "__main__":
         @telegramBot.message_handler(content_types=["text"], commands=['urllist'])
         def HandleUrlListMessage(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
+                logging.debug("URL list requested from [" + str(inputMessage.from_user.id) + "]")
                 global telegramBot
                 sqlCon = GetSqlConn()
                 feedsFromDb = [(x[0], x[1]) for x in sqlCon.cursor().execute("SELECT rowid, url FROM feeds WHERE 1").fetchall()]
@@ -442,7 +427,7 @@ if __name__ == "__main__":
                         textMessage += str(singleElement[0]) + ": " + singleElement[1] + "\n"
                     telegramBot.send_message(inputMessage.from_user.id, textMessage)
             else:
-                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+                logging.debug("Ignoring [" + inputMessage.text + "] message from [" + str(inputMessage.from_user.id) + "]")
         # Add new feed to the store   
         @telegramBot.message_handler(content_types=["text"], commands=['addfeed'])
         def HandleAddMessage(inputMessage: telebot.types.Message):
@@ -456,6 +441,7 @@ if __name__ == "__main__":
                         logging.warning("Invalid URL [" + splitText[1] + "]")
                         telegramBot.reply_to(inputMessage, "Invalid URL format")
                         return
+                    logging.debug("Feed add requested from [" + str(inputMessage.from_user.id) + "]")
                     # Check if feed already exists
                     if sqlCon.execute("SELECT * FROM feeds WHERE url=?", [splitText[1]]).fetchone() is not None:
                         logging.warning("Duplicate URL [" + splitText[1] + "]")
@@ -476,10 +462,10 @@ if __name__ == "__main__":
                     logging.warning("Invalid AddFeed arguments [" + inputMessage.text + "]")
                     telegramBot.reply_to(inputMessage, "Expecting only one argument")
             else:
-                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+                logging.debug("Ignoring [" + inputMessage.text + "] message from [" + str(inputMessage.from_user.id) + "]")
             # Close DB connection
             sqlCon.close()
-        # Remove feed from the store
+        # Remove feed from the stores
         @telegramBot.message_handler(content_types=["text"], commands=['rmfeed'])
         def HandleRemoveMessage(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
@@ -488,6 +474,7 @@ if __name__ == "__main__":
                 splitText = inputMessage.text.split(" ")
                 if (len(splitText) == 2):
                     if (splitText[1].isnumeric()):
+                        logging.debug("Feed deletion requested from [" + srt(inputMessage.from_user.id) + "]")
                         try:
                             sqlCon.execute("DELETE FROM feeds WHERE rowid=?", [splitText[1]])
                             sqlCon.commit()
@@ -500,22 +487,22 @@ if __name__ == "__main__":
                 else:
                     telegramBot.reply_to(inputMessage, "Expecting only one argument")
             else:
-                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+                logging.debug("Ignoring [" + inputMessage.text + "] message from [" + str(inputMessage.from_user.id) + "]")
         # Force bot execution
         @telegramBot.message_handler(content_types=["text"], commands=['force'])
         def HandleForceMessage(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
-                logging.debug("Manual bot execution requested")
+                logging.debug("Manual bot execution requested from [" + str(inputMessage.from_user.id) + "]")
                 global telegramBot
                 telegramBot.reply_to(inputMessage, "Forcing bot execution")
                 Main()
             else:
-                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
+                logging.debug("Ignoring [" + inputMessage.text + "] message from [" + str(inputMessage.from_user.id) + "]")
         # Remove old news
         @telegramBot.message_handler(content_types=["text"], commands=['rmoldnews'])
         def HandleOldNewsDelete(inputMessage: telebot.types.Message):
             if inputMessage.from_user.id == getAdminChatId():
-                logging.debug("Manual news deletion requested")
+                logging.debug("Manual news deletion requested from [" + str(inputMessage.from_user.id) + "]")
                 global telegramBot
                 splitMessage = inputMessage.text.split(" ")
                 if len(splitMessage) != 2:
