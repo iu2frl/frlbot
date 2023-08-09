@@ -557,6 +557,8 @@ if __name__ == "__main__":
                 sqlCon.commit()
                 # Send reply
                 telegramBot.reply_to(inputMessage, "[" + str(newFeedsCnt) + "] out of [" + str(len(splitCsv)) + "] feeds were added to DB")
+            else:
+                logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
     # Prepare DB object
     PrepareDb()
     if forceRun:
