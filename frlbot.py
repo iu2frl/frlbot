@@ -25,6 +25,7 @@ import emoji
 
 # Specify logging level
 logging.basicConfig(level=logging.DEBUG)
+logging.getLogger('hpack').setLevel(logging.WARNING)
 
 # Set DryRun mode
 dryRun = False
@@ -329,10 +330,10 @@ def Main():
                 logging.warning("Article: [" + singleNews.link + "] is coming from the future?!")
             else:
                 # Prepare message to send
-                itFlagEmoji = emoji.emojize(":flag_it:", language="alias")
-                enFlagEmoji = emoji.emojize(":flag_us:", language="alias")
+                itFlagEmoji = emoji.emojize(":Italy:", language="alias")
+                enFlagEmoji = emoji.emojize(":United_States:", language="alias")
                 autEmojy = emoji.emojize(":pencil2:", language="alias")
-                calEmoji = emoji.emojize(":calendar:", language="alias")
+                calEmoji = emoji.emojize(":spiral_calendar:", language="alias")
                 linkEmoji = emoji.emojize(":link:", language="alias")
                 try:
                     msgToSend = f"{itFlagEmoji} {TranslateText(singleNews.title, 'it')}\n" + \
