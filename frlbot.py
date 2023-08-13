@@ -21,6 +21,7 @@ import threading
 from googletrans import Translator
 import requests
 import xml.dom.minidom
+import emoji
 
 # Specify logging level
 logging.basicConfig(level=logging.DEBUG)
@@ -208,7 +209,7 @@ def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
     return newsList
 
 # Handle translation
-def TranslateText(inputText: str) -> str:
+def TranslateText(inputText: str, destLang: str = "it") -> str:
     # Check if skip translations
     if noAi:
         return inputText
@@ -217,7 +218,7 @@ def TranslateText(inputText: str) -> str:
     translator = Translator()
     trResponse = None
     try:
-        trResponse = translator.translate(inputText, dest='it')
+        trResponse = translator.translate(inputText, dest=destLang)
     except Exception as retExc:
         logging.error(str(retExc))
         return inputText
@@ -329,11 +330,18 @@ def Main():
             else:
                 # Prepare message to send
                 try:
-                    msgToSend = "\U0001F4E1 " + TranslateText(singleNews.title) + \
-                                "\n\n\U0000270F Autore: " + singleNews.author + \
-                                "\n\U0001F4C5 Data: " + singleNews.date.strftime("%Y/%m/%d, %H:%M") + \
-                                "\n\n" + TranslateText(singleNews.summary) + \
-                                "\n\n\U0001F517 Articolo completo: " + singleNews.link
+                    itFlagEmoji = emoji.emojize(":flag_it:", use_aliases=True)
+                    enFlagEmoji = emoji.emojize(":flag_us:", use_aliases=True)
+                    autEmojy = emoji.emojize(":pencil2:", use_aliases=True)
+                    calEmoji = emoji.emojize(":calendar:", use_aliases=True)
+                    linkEmoji = emoji.emojize(":link:", use_aliases=True)
+                    msgToSend = f"{itFlagEmoji} {TranslateText(singleNews.title)}\n" + \
+                                f"{enFlagEmoji} {singleNews.title}\n" + \
+                                f"\n{autEmojy} Autore: {singleNews.author}\n" + \
+                                f"{calEmoji} Data: {singleNews.date.strftime('%Y/%m/%d, %H:%M')}\n" + \
+                                f"\n{itFlagEmoji} {TranslateText(singleNews.summary)}\n" + \
+                                f"\n{enFlagEmoji} {singleNews.summary}\n" + \
+                                f"\n{linkEmoji} Articolo completo: {singleNews.link}"
                     if not dryRun:
                         telegramBot.send_message(getTargetChatId(), msgToSend, parse_mode="MARKDOWN")
                     else:
