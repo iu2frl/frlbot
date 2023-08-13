@@ -7,3 +7,5 @@ frlbot/
 docker/
 store/
 test.py
+frlbot/**
+venv/**

@@ -329,19 +329,19 @@ def Main():
                 logging.warning("Article: [" + singleNews.link + "] is coming from the future?!")
             else:
                 # Prepare message to send
+                itFlagEmoji = emoji.emojize(":flag_it:", language="alias")
+                enFlagEmoji = emoji.emojize(":flag_us:", language="alias")
+                autEmojy = emoji.emojize(":pencil2:", language="alias")
+                calEmoji = emoji.emojize(":calendar:", language="alias")
+                linkEmoji = emoji.emojize(":link:", language="alias")
                 try:
-                    itFlagEmoji = emoji.emojize(":flag_it:", use_aliases=True)
-                    enFlagEmoji = emoji.emojize(":flag_us:", use_aliases=True)
-                    autEmojy = emoji.emojize(":pencil2:", use_aliases=True)
-                    calEmoji = emoji.emojize(":calendar:", use_aliases=True)
-                    linkEmoji = emoji.emojize(":link:", use_aliases=True)
-                    msgToSend = f"{itFlagEmoji} {TranslateText(singleNews.title)}\n" + \
-                                f"{enFlagEmoji} {singleNews.title}\n" + \
-                                f"\n{autEmojy} Autore: {singleNews.author}\n" + \
-                                f"{calEmoji} Data: {singleNews.date.strftime('%Y/%m/%d, %H:%M')}\n" + \
-                                f"\n{itFlagEmoji} {TranslateText(singleNews.summary)}\n" + \
-                                f"\n{enFlagEmoji} {singleNews.summary}\n" + \
-                                f"\n{linkEmoji} Articolo completo: {singleNews.link}"
+                    msgToSend = f"{itFlagEmoji} {TranslateText(singleNews.title, 'it')}\n" + \
+                                f"{enFlagEmoji} {TranslateText(singleNews.title, 'en')}\n" + \
+                                f"\n{autEmojy} {singleNews.author}\n" + \
+                                f"{calEmoji} {singleNews.date.strftime('%Y/%m/%d, %H:%M')}\n" + \
+                                f"\n{itFlagEmoji} {TranslateText(singleNews.summary, 'it')}\n" + \
+                                f"\n{enFlagEmoji} {TranslateText(singleNews.summary, 'en')}\n" + \
+                                f"\n{linkEmoji} {singleNews.link}"
                     if not dryRun:
                         telegramBot.send_message(getTargetChatId(), msgToSend, parse_mode="MARKDOWN")
                     else:
@@ -362,7 +362,8 @@ def Main():
         # Check errors count
         if excCnt > 3:
             logging.error("Too many errors, skipping this upgrade")
-            telegramBot.send_message(getAdminChatId(), "Too many errors, skipping this execution. Last error: `" + excMsg + "`")
+            if not dryRun:
+                telegramBot.send_message(getAdminChatId(), "Too many errors, skipping this execution. Last error: `" + excMsg + "`")
             break
         # Stop execution after sending x elements
         if newsCnt >= maxNews:
