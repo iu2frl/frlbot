@@ -116,6 +116,11 @@ def InitializeBot():
     global telegramBot
     telegramBot = telebot.TeleBot(GetBotApiKey())
 
+# Remove HTML code
+def RemoveHtml(inputText: str) -> str:
+    regExHtml = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
+    return re.sub(regExHtml, "", inputText.strip())
+
 # Create news class
 class newsFromFeed(list):
     title: str = ""
@@ -129,17 +134,18 @@ class newsFromFeed(list):
         self.title = inputTitle.strip()
         self.date = dateutil.parser.parse(inputDate).replace(tzinfo=None)
         self.author = inputAuthor.strip()
-        # Remove HTML tags
-        regExHtml = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
-        # Remove "Read more"
-        regExReadMore = re.compile(re.escape("read more"), re.IGNORECASE)
-        # Parse summary
-        noHtml = re.sub(regExHtml, "", re.sub(regExReadMore, "", inputSummary.strip()))
-        # Cut input text
-        if len(noHtml) > 300:
-            cutText: str = noHtml[:300] + " ..."
+        if len(inputSummary) > 10:
+            # Remove "Read more"
+            regExReadMore = re.compile(re.escape("read more"), re.IGNORECASE)
+            # Parse summary
+            noReadMore = re.sub(regExReadMore, "", inputSummary.strip())
         else:
-            cutText: str = noHtml
+            noReadMore = inputSummary
+        # Cut input text
+        if len(noReadMore) > 300:
+            cutText: str = noReadMore[:300] + " ..."
+        else:
+            cutText: str = noReadMore
         self.summary = cutText.strip()
         self.link = inputLink.strip().lower()
         # Calculate checksum
@@ -172,31 +178,34 @@ def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
         logging.debug("Processing [" + singleFeed["link"] + "]")
         # Old RSS format
         if singleFeed["summary"]:
+            newsContent = RemoveHtml(singleFeed["summary"])
             # Check if valid content
-            if len(re.sub(r"(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w\.-]*)", "", singleFeed["summary"])) <= 10:
+            if len(newsContent) <= 10:
                 logging.warning("Skipping [" + singleFeed["link"] + "], empty content")   
                 continue
             # Generate new article
             try:
                 if singleFeed["author"]:
-                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], singleFeed["author"], singleFeed["summary"], singleFeed["link"])
+                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], singleFeed["author"], newsContent, singleFeed["link"])
                 else:
-                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], extract_domain(singleFeed["link"]), singleFeed["summary"], singleFeed["link"])
+                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], extract_domain(singleFeed["link"]), newsContent, singleFeed["link"])
                 newsList.append(newArticle)
             except Exception as retExc:
                 logging.warning("Cannot process [" + singleFeed["link"] + "], exception: " + str(retExc))
         # New RSS format
         elif singleFeed["description"]:
             # Check if valid content
-            if len(re.sub(r"(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w\.-]*)", "", singleFeed["description"])) <= 10:
-                logging.warning("Skipping [" + singleFeed["link"] + "], empty content")
+            newsContent = RemoveHtml(singleFeed["description"])
+            # Check if valid content
+            if len(newsContent) <= 10:
+                logging.warning("Skipping [" + singleFeed["link"] + "], empty content")   
                 continue
             # Generate new article
             try:
                 if singleFeed["dc:creator"]:
-                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["pubDate"], singleFeed["dc:creator"], singleFeed["description"], singleFeed["link"])
+                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["pubDate"], singleFeed["dc:creator"], newsContent, singleFeed["link"])
                 else:
-                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["pubDate"], extract_domain(singleFeed["link"]), singleFeed["description"], singleFeed["link"])
+                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["pubDate"], extract_domain(singleFeed["link"]), newsContent, singleFeed["link"])
             except Exception as retExc:
                 logging.warning("Cannot process [" + singleFeed["link"] + "], exception: " + str(retExc))
             newsList.append(newArticle)
