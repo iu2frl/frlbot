@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  docker-openwebrx:
+  docker-build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
