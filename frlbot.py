@@ -150,7 +150,7 @@ class newsFromFeed(list):
         cleanLink = inputLink.strip().lower()
         self.link = "[" + self.title + "](" + cleanLink + ")"
         # Calculate checksum
-        self.checksum = hashlib.md5(self.link.encode('utf-8')).hexdigest()
+        self.checksum = hashlib.md5(cleanLink.encode('utf-8')).hexdigest()
         pass
 
 # Extract domain from URL
