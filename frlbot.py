@@ -147,7 +147,8 @@ class newsFromFeed(list):
         else:
             cutText: str = noReadMore
         self.summary = cutText.strip()
-        self.link = "`" + inputLink.strip().lower() + "`"
+        cleanLink = inputLink.strip().lower()
+        self.link = "[" + self.title + "](" + cleanLink + ")"
         # Calculate checksum
         self.checksum = hashlib.md5(self.link.encode('utf-8')).hexdigest()
         pass
