@@ -26,6 +26,7 @@ import emoji
 # Specify logging level
 logging.basicConfig(level=logging.DEBUG)
 logging.getLogger('hpack').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.INFO)
 
 # Set DryRun mode
 dryRun = False
@@ -384,20 +385,22 @@ def Main():
 
 # Check if force send
 def CheckArgs(argv) -> list[bool, bool, bool]:
-    opts, args = getopt.getopt(argv,"fdn",["force", "dry", "noai"])
-    dryRun = False
-    forceRun = False
-    noAi = False
-    for opt, arg in opts:
-        if opt in ("-d", "--dry"):
-            dryRun = True
-        if opt in ("-f", "--force"):
-            forceRun = True
-        if opt in ("-n", "--noai"):
-            noAi = True
-    logging.info("DryRun: " + str(dryRun) + " - ForceRun: " + str(forceRun) + " - NoAI: " + str(noAi))
-    return dryRun, forceRun, noAi
-
+    try:
+        opts, args = getopt.getopt(argv,"fdn",["force", "dry", "noai"])
+        dryRun = False
+        forceRun = False
+        noAi = False
+        for opt, arg in opts:
+            if opt in ("-d", "--dry"):
+                dryRun = True
+            if opt in ("-f", "--force"):
+                forceRun = True
+            if opt in ("-n", "--noai"):
+                noAi = True
+        logging.info("DryRun: " + str(dryRun) + " - ForceRun: " + str(forceRun) + " - NoAI: " + str(noAi))
+        return dryRun, forceRun, noAi
+    except:
+        return None
 # Check if valid XML
 def ValidXml(inputUrl: str) -> bool:
     try:
@@ -430,7 +433,11 @@ if __name__ == "__main__":
         logging.info("Creating 'store' folder")
         os.makedirs("store")
     # Check if script was forcefully run
-    dryRun, forceRun, noAi = CheckArgs(sys.argv[1:])
+    try:
+        dryRun, forceRun, noAi = CheckArgs(sys.argv[1:])
+    except:
+        logging.critical("Invalid command line arguments have been set")
+        exit()
     # Initialize Bot
     if not dryRun:
         InitializeBot()
