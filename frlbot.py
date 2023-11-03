@@ -22,6 +22,7 @@ from googletrans import Translator
 import requests
 import xml.dom.minidom
 import emoji
+import requests
 
 # Specify logging level
 logging.basicConfig(level=logging.DEBUG)
@@ -168,10 +169,18 @@ def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
     fetchFeed = []
     for url in urlsList:
         logging.debug("Retrieving feed at [" + url + "]")
+        r: requests.Response()
         try:
-            fetchFeed.append(feedparser.parse(url)["entries"])
+            r = requests.get(url, timeout=3)
         except Exception as retExc:
-            logging.error("Cannot retrieve feed at [" + url + "]. Error message: " + str(retExc))
+            logging.error("Cannot download feed from [" + url + "]. Error message: " + str(retExc))
+        if r.status_code == 200:
+            try:
+                fetchFeed.append(feedparser.parse(r.content)["entries"])
+            except Exception as retExc:
+                logging.error("Cannot parse feed from [" + url + "]. Error message: " + str(retExc))
+        else:
+            logging.warning("Got error code [" + str(r.status_code) + "] while retrieving content at [" + url + "]")
     feedsList = [item for feed in fetchFeed for item in feed]
     # Prepare list of news
     newsList: list[newsFromFeed] = []
