@@ -345,7 +345,7 @@ def Main():
             logging.info("Sending: [" + singleNews.link + "]")
             # Check if article is no more than 30 days
             if datetime.now().replace(tzinfo=None) - singleNews.date.replace(tzinfo=None) > timedelta(days=30):
-                logging.warning("Article: [" + singleNews.link + "] is older than 30 days, skipping")
+                logging.debug("Article: [" + singleNews.link + "] is older than 30 days, skipping")
             elif singleNews.date.replace(tzinfo=None) > datetime.now().replace(tzinfo=None):
                 logging.warning("Article: [" + singleNews.link + "] is coming from the future?!")
             else:
@@ -379,7 +379,7 @@ def Main():
                     excMsg = str(retExc)
         # This message was already posted
         else:
-            logging.warning("Post at [" + singleNews.link + "] was already sent")
+            logging.debug("Post at [" + singleNews.link + "] was already sent")
         # Check errors count
         if excCnt > 3:
             logging.error("Too many errors, skipping this upgrade")
@@ -389,6 +389,7 @@ def Main():
         # Stop execution after sending x elements
         if newsCnt >= maxNews:
             break
+    logging.debug("No more articles to process, waiting for next execution")
     # Close DB connection
     sqlCon.close()
 
@@ -672,4 +673,3 @@ if __name__ == "__main__":
         SchedulerLoop()
     else:
         Main()
-    
