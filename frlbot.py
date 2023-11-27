@@ -38,7 +38,7 @@ noAi = False
 telegramBot: telebot.TeleBot
 
 # Default feeds
-defaultUrls = [
+default_urls = [
                 'https://www.amsat.org/feed/',
                 'https://qrper.com/feed/',
                 'https://swling.com/blog/feed/', 
@@ -54,25 +54,27 @@ defaultUrls = [
             ]
 
 # Get bot token from ENV
-def GetBotApiKey() -> str:
+def get_bot_api_from_env() -> str:
+    """Return the bot token from environment variables"""
     # Read API Token from environment variables
     if dryRun:
         return ""
-    BOT_TOKEN: str = os.environ.get('BOT_TOKEN')
-    if (not BOT_TOKEN):
+    env_token: str = os.environ.get('BOT_TOKEN')
+    if (not env_token):
         logging.critical("Input token is empty!")
         raise Exception("Invalid BOT_TOKEN")
-    if (len(BOT_TOKEN) < 10):
+    if (len(env_token) < 10):
         logging.critical("Input token is too short!")
         raise Exception("Invalid BOT_TOKEN")
-    if (":" not in BOT_TOKEN):
+    if (":" not in env_token):
         logging.critical("Invalid input token format")
         raise Exception("Invalid BOT_TOKEN")
     # Return token
-    return str(BOT_TOKEN)
+    return str(env_token)
 
 # Get target chat from ENV
-def getTargetChatId() -> int:
+def get_target_chat_from_env() -> int:
+    """Return the target chat ID from environment variables"""
     if dryRun:
         return ""
     # Read API Token from environment variables
@@ -87,7 +89,8 @@ def getTargetChatId() -> int:
     return int(BOT_TARGET)
 
 # Get target chat from ENV
-def getAdminChatId() -> int:
+def get_admin_chat_from_env() -> int:
+    """Return the admin chat ID from environment variables"""
     if dryRun:
         return -1
     # Read API Token from environment variables
@@ -99,32 +102,38 @@ def getAdminChatId() -> int:
     return int(BOT_TARGET)
 
 # Get maximum news age
-def getMaxNewsDays() -> int:
+def get_max_news_days_from_env() -> int:
+    """Return the maximum days a news should be stored from environment variables"""
     if dryRun:
         return 30
     # Read API Token from environment variables
     return int(os.getenv('MAX_NEWS_AGE', default=30))
 
 # Get how many news we should post at each loop
-def getMaxNewsCnt() -> int:
+def get_max_news_cnt_from_env() -> int:
+    """Return how many news to process from environment variables"""
     return int(os.getenv('NEWS_COUNT', default=1))
 
 # Get post send interval
-def getPostInterval() -> int:
+def get_post_interval_from_env() -> int:
+    """Return the publishing interval from environment variables"""
     return int(os.getenv('POST_INTERVAL', default=41))
 
 # Bot initialization
-def InitializeBot():
+def init_bot():
+    """Initialize the Telegram bot class"""
     global telegramBot
-    telegramBot = telebot.TeleBot(GetBotApiKey())
+    telegramBot = telebot.TeleBot(get_bot_api_from_env())
 
 # Remove HTML code
-def RemoveHtml(inputText: str) -> str:
-    regExHtml = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
-    return re.sub(regExHtml, "", inputText.strip())
+def remove_html(inputText: str) -> str:
+    """Remove html code from the news content"""
+    regex_html = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
+    return re.sub(regex_html, "", inputText.strip())
 
 # Create news class
-class newsFromFeed(list):
+class NewsFromFeed(list):
+    """Custom class to store news content"""
     title: str = ""
     date: datetime
     author: str = ""
@@ -138,25 +147,25 @@ class newsFromFeed(list):
         self.author = inputAuthor.strip()
         if len(inputSummary) > 10:
             # Remove "Read more"
-            regExReadMore = re.compile(re.escape("read more"), re.IGNORECASE)
+            regex_read_more = re.compile(re.escape("read more"), re.IGNORECASE)
             # Parse summary
-            noReadMore = re.sub(regExReadMore, "", inputSummary.strip())
+            no_read_more = re.sub(regex_read_more, "", inputSummary.strip())
         else:
-            noReadMore = inputSummary
+            no_read_more = inputSummary
         # Cut input text
-        if len(noReadMore) > 300:
-            cutText: str = noReadMore[:300] + " ..."
+        if len(no_read_more) > 300:
+            cut_text: str = no_read_more[:300] + " ..."
         else:
-            cutText: str = noReadMore
-        self.summary = cutText.strip()
-        cleanLink = inputLink.strip().lower()
-        self.link = "[" + self.title + "](" + cleanLink + ")"
+            cut_text: str = no_read_more
+        self.summary = cut_text.strip()
+        clean_url = inputLink.strip().lower()
+        self.link = "[" + self.title + "](" + clean_url + ")"
         # Calculate checksum
-        self.checksum = hashlib.md5(cleanLink.encode('utf-8')).hexdigest()
-        pass
+        self.checksum = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
 
 # Extract domain from URL
 def extract_domain(url):
+    """Extract the domain name from an URL"""
     pattern = r'https?://(?:www\.)?([^/]+)'
     result = re.match(pattern, url)
     if result:
@@ -164,99 +173,105 @@ def extract_domain(url):
     return "anonymous"
 
 # Parse RSS feed
-def parseNews(urlsList: list[str]) -> list[newsFromFeed]:
+def parse_news(urls_list: list[str]) -> list[NewsFromFeed]:
+    """Reads the url list and returns a list of RSS contents"""
     # Get feeds from the list above
-    fetchFeed = []
-    for url in urlsList:
+    fetch_feeds = []
+    for url in urls_list:
         logging.debug("Retrieving feed at [" + url + "]")
-        r: requests.Response()
+        r: requests.Response = None
         try:
-            r = requests.get(url, timeout=3)
-        except Exception as retExc:
-            logging.error("Cannot download feed from [" + url + "]. Error message: " + str(retExc))
+            r = requests.get(url, timeout=10)
+        except Exception as ret_exception:
+            logging.error("Cannot download feed from [" + url + "]. Error message: " + str(ret_exception))
+        if r is None:
+            logging.warning(f"Cannot retrieve [{url}] check network status")
+            continue
         if r.status_code == 200:
             try:
-                fetchFeed.append(feedparser.parse(r.content)["entries"])
-            except Exception as retExc:
-                logging.error("Cannot parse feed from [" + url + "]. Error message: " + str(retExc))
+                fetch_feeds.append(feedparser.parse(r.content)["entries"])
+            except Exception as ret_exception:
+                logging.error("Cannot parse feed from [" + url + "]. Error message: " + str(ret_exception))
         else:
             logging.warning("Got error code [" + str(r.status_code) + "] while retrieving content at [" + url + "]")
-    feedsList = [item for feed in fetchFeed for item in feed]
+    feeds_list = [item for feed in fetch_feeds for item in feed]
     # Prepare list of news
-    newsList: list[newsFromFeed] = []
+    news_list: list[NewsFromFeed] = []
     # Scan each feed and convert it to a class element. Store the checksum to avoid dupes
-    for singleFeed in feedsList:
-        logging.debug("Processing [" + singleFeed["link"] + "]")
+    for single_feed in feeds_list:
+        logging.debug("Processing [" + single_feed["link"] + "]")
         # Old RSS format
-        if singleFeed["summary"]:
-            newsContent = RemoveHtml(singleFeed["summary"])
+        if single_feed["summary"]:
+            feed_content = remove_html(single_feed["summary"])
             # Check if valid content
-            if len(newsContent) <= 10:
-                logging.warning("Skipping [" + singleFeed["link"] + "], empty content")   
+            if len(feed_content) <= 10:
+                logging.warning("Skipping [" + single_feed["link"] + "], empty content")   
                 continue
             # Generate new article
             try:
-                if singleFeed["author"]:
-                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], singleFeed["author"], newsContent, singleFeed["link"])
+                if single_feed["author"]:
+                    new_article = NewsFromFeed(single_feed["title"], single_feed["published"], single_feed["author"], feed_content, single_feed["link"])
                 else:
-                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["published"], extract_domain(singleFeed["link"]), newsContent, singleFeed["link"])
-                newsList.append(newArticle)
-            except Exception as retExc:
-                logging.warning("Cannot process [" + singleFeed["link"] + "], exception: " + str(retExc))
+                    new_article = NewsFromFeed(single_feed["title"], single_feed["published"], extract_domain(single_feed["link"]), feed_content, single_feed["link"])
+                news_list.append(new_article)
+            except Exception as ret_exception:
+                logging.warning("Cannot process [" + single_feed["link"] + "], exception: " + str(ret_exception))
         # New RSS format
-        elif singleFeed["description"]:
+        elif single_feed["description"]:
             # Check if valid content
-            newsContent = RemoveHtml(singleFeed["description"])
+            feed_content = remove_html(single_feed["description"])
             # Check if valid content
-            if len(newsContent) <= 10:
-                logging.warning("Skipping [" + singleFeed["link"] + "], empty content")   
+            if len(feed_content) <= 10:
+                logging.warning("Skipping [" + single_feed["link"] + "], empty content")   
                 continue
             # Generate new article
             try:
-                if singleFeed["dc:creator"]:
-                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["pubDate"], singleFeed["dc:creator"], newsContent, singleFeed["link"])
+                if single_feed["dc:creator"]:
+                    new_article = NewsFromFeed(single_feed["title"], single_feed["pubDate"], single_feed["dc:creator"], feed_content, single_feed["link"])
                 else:
-                    newArticle = newsFromFeed(singleFeed["title"], singleFeed["pubDate"], extract_domain(singleFeed["link"]), newsContent, singleFeed["link"])
-            except Exception as retExc:
-                logging.warning("Cannot process [" + singleFeed["link"] + "], exception: " + str(retExc))
-            newsList.append(newArticle)
+                    new_article = NewsFromFeed(single_feed["title"], single_feed["pubDate"], extract_domain(single_feed["link"]), feed_content, single_feed["link"])
+            except Exception as ret_exception:
+                logging.warning("Cannot process [" + single_feed["link"] + "], exception: " + str(ret_exception))
+            news_list.append(new_article)
         else:
             # Unknown format
-            logging.warning("Skipping [" + singleFeed["link"] + "], incompatible RSS format")
+            logging.warning("Skipping [" + single_feed["link"] + "], incompatible RSS format")
             continue
     # Return list
-    logging.info("Fetch [" + str(len(newsList)) + "] news")
-    newsList.sort(key=lambda news: news.date, reverse=True)
-    return newsList
+    logging.info("Fetch [" + str(len(news_list)) + "] news")
+    news_list.sort(key=lambda news: news.date, reverse=True)
+    return news_list
 
 # Handle translation
-def TranslateText(inputText: str, destLang: str = "it") -> str:
+def translate_text(input_text: str, dest_lang: str = "it") -> str:
+    """Translate text using Google APIs"""
     # Check if skip translations
     if noAi:
-        return inputText
+        return input_text
     # Start text rework
-    logging.debug("Translating: [" + inputText + "]")
+    logging.debug("Translating: [" + input_text + "]")
     translator = Translator()
-    trResponse = None
+    translator_response = None
     try:
-        trResponse = translator.translate(inputText, dest=destLang)
-    except Exception as retExc:
-        logging.error(str(retExc))
-        return inputText
-    logging.debug(trResponse)
-    if trResponse is None:
+        translator_response = translator.translate(input_text, dest=dest_lang)
+    except Exception as ret_exc:
+        logging.error(str(ret_exc))
+        return input_text
+    logging.debug(translator_response)
+    if translator_response is None:
         logging.error("Unable to translate text")
-        return inputText
-    elif len(trResponse.text) < 10:
+        return input_text
+    elif len(translator_response.text) < 10:
         logging.error("Translation was too short")
-        return inputText
-    return trResponse.text
+        return input_text
+    return translator_response.text
     
 # Database preparation
-def PrepareDb() -> None:
+def prepare_db() -> None:
+    """Prepare the sqlite store"""
     # Connect to SQLite
     logging.debug("Opening SQLite store")
-    sqliteConn = GetSqlConn()
+    sqliteConn = get_sql_connector()
     sqliteCursor = sqliteConn.cursor()
     # Create news table
     try:
@@ -266,11 +281,11 @@ def PrepareDb() -> None:
         logging.debug("News table already exists")
     # Count sent articles
     try:
-        dataFromDb = sqliteCursor.execute("SELECT checksum FROM news WHERE 1").fetchall()
-        logging.info("News table contains [" + str(len(dataFromDb)) + "] records")
-    except Exception as retExc:
-        logging.critical("Error while getting count of news records: " + str(retExc))
-        raise Exception(retExc)
+        data_from_db = sqliteCursor.execute("SELECT checksum FROM news WHERE 1").fetchall()
+        logging.info("News table contains [" + str(len(data_from_db)) + "] records")
+    except Exception as returned_exception:
+        logging.critical("Error while getting count of news records: " + str(returned_exception))
+        raise Exception(returned_exception)
     # Create feeds table
     try:
         sqliteCursor.execute("CREATE TABLE feeds(url)")
@@ -278,141 +293,147 @@ def PrepareDb() -> None:
     except:
         logging.debug("Feeds table already exists")
     # Get feeds from DB
-    dataFromDb = sqliteCursor.execute("SELECT url FROM feeds WHERE 1").fetchall()
-    if (len(dataFromDb) < 1):
+    data_from_db = sqliteCursor.execute("SELECT url FROM feeds WHERE 1").fetchall()
+    if (len(data_from_db) < 1):
         logging.info("News table is empty, adding default")
         try:
-            for singleUrl in defaultUrls:
-                logging.debug("Adding [" + singleUrl + "]")
-                sqliteCursor.execute("INSERT INTO feeds(url) VALUES(?)", [singleUrl])
+            for single_url in default_urls:
+                logging.debug("Adding [" + single_url + "]")
+                sqliteCursor.execute("INSERT INTO feeds(url) VALUES(?)", [single_url])
             sqliteConn.commit()
             if (len(sqliteCursor.execute("SELECT url FROM feeds WHERE 1").fetchall()) < 1):
                 raise Exception("Records were not added!")
             logging.debug("Default records were added")
-        except Exception as retExc:
-            logging.error(retExc)
+        except Exception as returned_exception:
+            logging.error(returned_exception)
             return
     else:
-        logging.info("Feeds table contains [" + str(len(dataFromDb)) + "] records")
+        logging.info("Feeds table contains [" + str(len(data_from_db)) + "] records")
     # Close DB connection
     sqliteConn.close()
 
 # Get SQL Connector
-def GetSqlConn() -> sqlite3.Connection:
+def get_sql_connector() -> sqlite3.Connection:
+    """Connect to sqlite"""
     return sqlite3.connect("store/frlbot.db", timeout=3)
 
 # Delete old SQLite records
-def RemoveOldNews(max_days: int = -1) -> int:
+def remove_old_news(max_days: int = -1) -> int:
+    """Delete all old feeds from the database"""
     if max_days == -1:
-        max_days = getMaxNewsDays()
+        max_days = get_max_news_days_from_env()
     try:
         # Get SQL cursor
-        sqlCon = GetSqlConn()
+        sqlCon = get_sql_connector()
         oldNews = sqlCon.cursor().execute("SELECT date FROM news WHERE date <= date('now', '-" + str(max_days) + " day')").fetchall()
         logging.info("Removing [" + str(len(oldNews)) + "] old news from DB")
         sqlCon.cursor().execute("DELETE FROM news WHERE date <= date('now', '-" + str(max_days) + " day')")
         sqlCon.commit()
         sqlCon.close()
         return len(oldNews)
-    except Exception as retExc:
-        logging.error("Cannot delete older news. " + str(retExc))
+    except Exception as returned_exception:
+        logging.error("Cannot delete older news. " + str(returned_exception))
         return -1
 
 # Main code
-def Main():
+def main():
+    """Main robot code"""
     logging.info("Starting bot")
     # Generate bot object
     global telegramBot
     # Track how many news we sent
-    newsCnt: int = 0
-    maxNews = getMaxNewsCnt()
+    news_cnt: int = 0
+    max_news = get_max_news_cnt_from_env()
     # Get SQL cursor
-    sqlCon = GetSqlConn()
+    sql_connector = get_sql_connector()
     # Clean data from DB
-    feedsFromDb = [x[0] for x in sqlCon.cursor().execute("SELECT url FROM feeds WHERE 1").fetchall()]
-    if feedsFromDb is None:
+    feeds_from_db = [x[0] for x in sql_connector.cursor().execute("SELECT url FROM feeds WHERE 1").fetchall()]
+    if feeds_from_db is None:
         logging.error("No news from DB")
-        sqlCon.close()
+        sql_connector.close()
         return
-    logging.debug("Fetching [" + str(len(feedsFromDb)) + "] feeds")
+    logging.debug("Fetching [" + str(len(feeds_from_db)) + "] feeds")
     # Monitor exceptions and report in case of multiple errors
-    excCnt = 0
-    excMsg = ""
+    exception_cnt = 0
+    exception_message = ""
     # Get news from feed
-    for singleNews in parseNews(feedsFromDb):
+    for single_news in parse_news(feeds_from_db):
         # Check if we already sent this message
-        if sqlCon.cursor().execute("SELECT * FROM news WHERE checksum='" + singleNews.checksum + "'").fetchone() is None:
-            logging.info("Sending: [" + singleNews.link + "]")
+        if sql_connector.cursor().execute("SELECT * FROM news WHERE checksum='" + single_news.checksum + "'").fetchone() is None:
+            logging.info("Sending: [" + single_news.link + "]")
             # Check if article is no more than 30 days
-            if datetime.now().replace(tzinfo=None) - singleNews.date.replace(tzinfo=None) > timedelta(days=30):
-                logging.debug("Article: [" + singleNews.link + "] is older than 30 days, skipping")
-            elif singleNews.date.replace(tzinfo=None) > datetime.now().replace(tzinfo=None):
-                logging.warning("Article: [" + singleNews.link + "] is coming from the future?!")
+            if datetime.now().replace(tzinfo=None) - single_news.date.replace(tzinfo=None) > timedelta(days=30):
+                logging.debug("Article: [" + single_news.link + "] is older than 30 days, skipping")
+            elif single_news.date.replace(tzinfo=None) > datetime.now().replace(tzinfo=None):
+                logging.warning("Article: [" + single_news.link + "] is coming from the future?!")
             else:
                 # Prepare message to send
-                itFlagEmoji = emoji.emojize(":Italy:", language="alias")
-                enFlagEmoji = emoji.emojize(":United_States:", language="alias")
-                autEmojy = emoji.emojize(":pencil2:", language="alias")
-                calEmoji = emoji.emojize(":spiral_calendar:", language="alias")
-                linkEmoji = emoji.emojize(":link:", language="alias")
+                emoji_flag_it = emoji.emojize(":Italy:", language="alias")
+                emoji_flag_en = emoji.emojize(":United_States:", language="alias")
+                emoji_pencil = emoji.emojize(":pencil2:", language="alias")
+                emoji_calendar = emoji.emojize(":spiral_calendar:", language="alias")
+                emoji_link = emoji.emojize(":link:", language="alias")
                 try:
-                    msgToSend = f"{itFlagEmoji} {TranslateText(singleNews.title, 'it')}\n" + \
-                                f"{enFlagEmoji} {TranslateText(singleNews.title, 'en')}\n" + \
-                                f"\n{autEmojy} {singleNews.author}\n" + \
-                                f"{calEmoji} {singleNews.date.strftime('%Y/%m/%d, %H:%M')}\n" + \
-                                f"\n{itFlagEmoji} {TranslateText(singleNews.summary, 'it')}\n" + \
-                                f"\n{enFlagEmoji} {TranslateText(singleNews.summary, 'en')}\n" + \
-                                f"\n{linkEmoji} {singleNews.link}"
+                    telegram_payload = f"{emoji_flag_it} {translate_text(single_news.title, 'it')}\n" + \
+                                        f"{emoji_flag_en} {translate_text(single_news.title, 'en')}\n" + \
+                                        f"\n{emoji_pencil} {single_news.author}\n" + \
+                                        f"{emoji_calendar} {single_news.date.strftime('%Y/%m/%d, %H:%M')}\n" + \
+                                        f"\n{emoji_flag_it} {translate_text(single_news.summary, 'it')}\n" + \
+                                        f"\n{emoji_flag_en} {translate_text(single_news.summary, 'en')}\n" + \
+                                        f"\n{emoji_link} {single_news.link}"
                     if not dryRun:
-                        telegramBot.send_message(getTargetChatId(), msgToSend, parse_mode="MARKDOWN")
+                        telegramBot.send_message(get_target_chat_from_env(), telegram_payload, parse_mode="MARKDOWN")
                     else:
-                        logging.info(msgToSend)
+                        logging.info(telegram_payload)
                     if not dryRun:
                         # Store this article to DB
-                        logging.debug("Adding [" + singleNews.checksum + "] to store")
-                        sqlCon.cursor().execute("INSERT INTO news(date, checksum) VALUES(?, ?)", [singleNews.date, singleNews.checksum])
-                        sqlCon.commit()
-                    newsCnt += 1
-                except Exception as retExc:
-                    logging.error(str(retExc))
-                    excCnt += 1
-                    excMsg = str(retExc)
+                        logging.debug("Adding [" + single_news.checksum + "] to store")
+                        sql_connector.cursor().execute("INSERT INTO news(date, checksum) VALUES(?, ?)", [single_news.date, single_news.checksum])
+                        sql_connector.commit()
+                    news_cnt += 1
+                except Exception as returned_exception:
+                    logging.error(str(returned_exception))
+                    exception_cnt += 1
+                    exception_message = str(returned_exception)
         # This message was already posted
         else:
-            logging.debug("Post at [" + singleNews.link + "] was already sent")
+            logging.debug("Post at [" + single_news.link + "] was already sent")
         # Check errors count
-        if excCnt > 3:
+        if exception_cnt > 3:
             logging.error("Too many errors, skipping this upgrade")
             if not dryRun:
-                telegramBot.send_message(getAdminChatId(), "Too many errors, skipping this execution. Last error: `" + excMsg + "`")
+                telegramBot.send_message(get_admin_chat_from_env(), "Too many errors, skipping this execution. Last error: `" + exception_message + "`")
             break
         # Stop execution after sending x elements
-        if newsCnt >= maxNews:
+        if news_cnt >= max_news:
             break
     logging.debug("No more articles to process, waiting for next execution")
     # Close DB connection
-    sqlCon.close()
+    sql_connector.close()
 
 # Check if force send
-def CheckArgs(argv) -> list[bool, bool, bool]:
+def check_arguments(argv) -> list[bool, bool, bool]:
+    """Check CLI arguments"""
     try:
-        opts, args = getopt.getopt(argv,"fdn",["force", "dry", "noai"])
-        dryRun = False
-        forceRun = False
-        noAi = False
+        opts, args = getopt.getopt(argv,"fdn",["force", "dry", "notr"])
+        dry_run = False
+        force_run = False
+        no_translate = False
         for opt, arg in opts:
             if opt in ("-d", "--dry"):
-                dryRun = True
+                dry_run = True
             if opt in ("-f", "--force"):
-                forceRun = True
-            if opt in ("-n", "--noai"):
-                noAi = True
-        logging.info("DryRun: " + str(dryRun) + " - ForceRun: " + str(forceRun) + " - NoAI: " + str(noAi))
-        return dryRun, forceRun, noAi
+                force_run = True
+            if opt in ("-n", "--notr"):
+                no_translate = True
+        logging.info("DryRun: " + str(dry_run) + " - ForceRun: " + str(force_run) + " - NoAI: " + str(no_translate))
+        return dry_run, force_run, no_translate
     except:
         return None
+
 # Check if valid XML
-def ValidXml(inputUrl: str) -> bool:
+def valid_xml(inputUrl: str) -> bool:
+    """Check if XML has valid syntax"""
     try:
         getRes = requests.get(inputUrl)
         xml.dom.minidom.parseString(getRes.content)
@@ -421,17 +442,19 @@ def ValidXml(inputUrl: str) -> bool:
         return False
 
 # Cleanup old news
-schedule.every().day.at("01:00").do(RemoveOldNews, )
+schedule.every().day.at("01:00").do(remove_old_news, )
 # Execute bot news
-schedule.every(getPostInterval()).minutes.do(Main, )
+schedule.every(get_post_interval_from_env()).minutes.do(main, )
 
-def SchedulerLoop():
+def scheduler_loop():
+    """Thread to handle the scheduler"""
     logging.info("Starting scheduler loop")
     while True:
         schedule.run_pending()
         time.sleep(5)
 
-def TelegramLoop():
+def telegram_loop():
+    """Thread to handle Telegram commands"""
     logging.info("Starting telegram loop")
     telegramBot.infinity_polling()
 
@@ -444,20 +467,20 @@ if __name__ == "__main__":
         os.makedirs("store")
     # Check if script was forcefully run
     try:
-        dryRun, forceRun, noAi = CheckArgs(sys.argv[1:])
+        dryRun, forceRun, noAi = check_arguments(sys.argv[1:])
     except:
         logging.critical("Invalid command line arguments have been set")
         exit()
     # Initialize Bot
     if not dryRun:
-        InitializeBot()
+        init_bot()
         # Handle LIST command
         @telegramBot.message_handler(content_types=["text"], commands=['urllist'])
         def HandleUrlListMessage(inputMessage: telebot.types.Message):
-            if inputMessage.from_user.id == getAdminChatId():
+            if inputMessage.from_user.id == get_admin_chat_from_env():
                 logging.debug("URL list requested from [" + str(inputMessage.from_user.id) + "]")
                 global telegramBot
-                sqlCon = GetSqlConn()
+                sqlCon = get_sql_connector()
                 feedsFromDb = [(x[0], x[1]) for x in sqlCon.cursor().execute("SELECT rowid, url FROM feeds WHERE 1").fetchall()]
                 sqlCon.close()
                 if len(feedsFromDb) < 1:
@@ -476,9 +499,9 @@ if __name__ == "__main__":
         # Add new feed to the store   
         @telegramBot.message_handler(content_types=["text"], commands=['addfeed'])
         def HandleAddMessage(inputMessage: telebot.types.Message):
-            if inputMessage.from_user.id == getAdminChatId():
+            if inputMessage.from_user.id == get_admin_chat_from_env():
                 global telegramBot
-                sqlCon = GetSqlConn()
+                sqlCon = get_sql_connector()
                 splitText = inputMessage.text.split(" ")
                 if (len(splitText) == 2):
                     # Check if URL is valid
@@ -495,7 +518,7 @@ if __name__ == "__main__":
                     # Add it to the store
                     try:
                         logging.info("Adding [" + splitText[1] + "] to DB")
-                        if ValidXml(splitText[1]):
+                        if valid_xml(splitText[1]):
                             sqlCon.execute("INSERT INTO feeds(url) VALUES(?)", [splitText[1]])
                             sqlCon.commit()
                             telegramBot.reply_to(inputMessage, "Added successfully!")
@@ -513,9 +536,9 @@ if __name__ == "__main__":
         # Remove feed from the stores
         @telegramBot.message_handler(content_types=["text"], commands=['rmfeed'])
         def HandleRemoveMessage(inputMessage: telebot.types.Message):
-            if inputMessage.from_user.id == getAdminChatId():
+            if inputMessage.from_user.id == get_admin_chat_from_env():
                 global telegramBot
-                sqlCon = GetSqlConn()
+                sqlCon = get_sql_connector()
                 splitText = inputMessage.text.split(" ")
                 if (len(splitText) == 2):
                     if (splitText[1].isnumeric()):
@@ -536,24 +559,24 @@ if __name__ == "__main__":
         # Force bot execution
         @telegramBot.message_handler(content_types=["text"], commands=['force'])
         def HandleForceMessage(inputMessage: telebot.types.Message):
-            if inputMessage.from_user.id == getAdminChatId():
+            if inputMessage.from_user.id == get_admin_chat_from_env():
                 logging.debug("Manual bot execution requested from [" + str(inputMessage.from_user.id) + "]")
                 global telegramBot
                 telegramBot.reply_to(inputMessage, "Forcing bot execution")
-                Main()
+                main()
             else:
                 logging.debug("Ignoring [" + inputMessage.text + "] message from [" + str(inputMessage.from_user.id) + "]")
         # Remove old news
         @telegramBot.message_handler(content_types=["text"], commands=['rmoldnews'])
         def HandleOldNewsDelete(inputMessage: telebot.types.Message):
-            if inputMessage.from_user.id == getAdminChatId():
+            if inputMessage.from_user.id == get_admin_chat_from_env():
                 logging.debug("Manual news deletion requested from [" + str(inputMessage.from_user.id) + "]")
                 global telegramBot
                 splitMessage = inputMessage.text.split(" ")
                 if len(splitMessage) != 2:
                     telegramBot.reply_to(inputMessage, "Expecting only one argument")
                 elif splitMessage[1].isdigit():
-                    deletedNews = RemoveOldNews(int(splitMessage[1]))
+                    deletedNews = remove_old_news(int(splitMessage[1]))
                     if deletedNews >= 0:
                         telegramBot.reply_to(inputMessage, "Deleting [" + str(deletedNews) + "] news older than [" + str(splitMessage[1]) + "] days")
                     else:
@@ -565,10 +588,10 @@ if __name__ == "__main__":
         # Add from CSV list
         @telegramBot.message_handler(content_types=["text"], commands=['addcsv'])
         def HandleAddCsvList(inputMessage: telebot.types.Message):
-            if inputMessage.from_user.id == getAdminChatId():
+            if inputMessage.from_user.id == get_admin_chat_from_env():
                 logging.debug("Adding news from CSV list")
                 global telegramBot
-                sqlCon = GetSqlConn()
+                sqlCon = get_sql_connector()
                 splitMessage = inputMessage.text.split("/addcsv")
                 # Invalid syntax
                 if len(splitMessage) <= 1:
@@ -590,7 +613,7 @@ if __name__ == "__main__":
                     else:
                         try:
                             logging.info("Adding [" + singleUrl + "] to DB")
-                            if ValidXml(singleUrl):
+                            if valid_xml(singleUrl):
                                 sqlCon.execute("INSERT INTO feeds(url) VALUES(?)", [singleUrl])
                                 newFeedsCnt += 1
                                 logging.debug("Added [" + singleUrl + "] to DB")
@@ -608,11 +631,11 @@ if __name__ == "__main__":
         # Perform DB cleanup (duplicate and invalid)
         @telegramBot.message_handler(content_types=["text"], commands=['dbcleanup'])
         def HandleDbCleanup(inputMessage: telebot.types.Message):
-            if inputMessage.from_user.id == getAdminChatId():
+            if inputMessage.from_user.id == get_admin_chat_from_env():
                 logging.debug("Peforming news cleanup")
                 global telegramBot
                 telegramBot.reply_to(inputMessage, "Performing cleanup, please be patient...")
-                sqlCon = GetSqlConn()
+                sqlCon = get_sql_connector()
                 feedsFromDb = [(x[0], x[1]) for x in sqlCon.cursor().execute("SELECT rowid, url FROM feeds WHERE 1").fetchall()]
                 duplicatesCnt = 0
                 invalidsCnt = 0
@@ -631,7 +654,7 @@ if __name__ == "__main__":
                         duplicatesCnt += 1
                     else:
                         # Check if feed is valid
-                        if not ValidXml(singleElement[1]):
+                        if not valid_xml(singleElement[1]):
                             # Remove duplicate
                             logging.info("Removing invalid [" + singleElement[1] + "] from DB")
                             sqlCon.execute("DELETE FROM feeds WHERE rowid=?", [singleElement[0]])
@@ -646,7 +669,7 @@ if __name__ == "__main__":
         # Perform DB backup
         @telegramBot.message_handler(content_types=["text"], commands=['sqlitebackup'])
         def HandleSqliteBackup(inputMessage: telebot.types.Message):
-            if inputMessage.from_user.id == getAdminChatId():
+            if inputMessage.from_user.id == get_admin_chat_from_env():
                 logging.debug("Manual DB backup requested from [" + str(inputMessage.from_user.id) + "]")
                 global telegramBot
                 try:
@@ -660,16 +683,16 @@ if __name__ == "__main__":
             else:
                 logging.debug("Ignoring message from [" + str(inputMessage.from_user.id) + "]")
     # Prepare DB object
-    PrepareDb()
+    prepare_db()
     if forceRun:
         logging.info("Starting forced execution")
-        Main()
+        main()
         sys.exit(0)
     # Start async execution
     logging.info("Starting main loop")
     if not dryRun:
-        telegramThread = threading.Thread(target=TelegramLoop, name="TelegramLoop")
+        telegramThread = threading.Thread(target=telegram_loop, name="TelegramLoop")
         telegramThread.start()
-        SchedulerLoop()
+        scheduler_loop()
     else:
-        Main()
+        main()
